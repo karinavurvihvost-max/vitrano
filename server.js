@@ -36,7 +36,7 @@ async function readBody(req) {
   let raw = '';
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 40000) { const e = new Error('Request body too large'); e.status = 413; throw e; }
+    if (raw.length > 1800000) { const e = new Error('Файл завеликий. Стисніть фото або виберіть інше.'); e.status = 413; throw e; }
   }
   try { return JSON.parse(raw || '{}'); }
   catch { const e = new Error('Invalid JSON'); e.status = 400; throw e; }
@@ -188,7 +188,7 @@ async function handle(req, res) {
           let sup=await client.query('select id from suppliers where name=$1 order by created_at limit 1',[supplier]);
           if(!sup.rows.length) sup=await client.query('insert into suppliers(name) values($1) returning id',[supplier]);
           const p=await client.query('insert into products(sku,name,slug,description,category_id,image_urls,main_image_url,is_visible) values($1,$2,$3,$4,$5,$6,$7,$8) returning id',
-            [safeString(b.sku,80)||null,name,slug,safeString(b.description,3000),cat.rows[0].id,Array.isArray(b.image_urls)?b.image_urls.filter(x=>typeof x==='string'&&/^https:\/\//.test(x)).slice(0,8):[],safeString(b.main_image_url,1000)||null,b.is_visible===true]);
+            [safeString(b.sku,80)||null,name,slug,safeString(b.description,3000),cat.rows[0].id,Array.isArray(b.image_urls)?b.image_urls.filter(x=>typeof x==='string'&&/^https:\/\//.test(x)).slice(0,8):[],(typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000))||null,b.is_visible===true]);
           await client.query('insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true)',
             [p.rows[0].id,sup.rows[0].id,cost,price,['available','check','unavailable'].includes(b.availability)?b.availability:'check']);
           await client.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)', ['product.create','product',p.rows[0].id,JSON.stringify({name})]);
@@ -202,7 +202,7 @@ async function handle(req, res) {
         if (b.is_visible!==undefined) await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]);
         if (b.name!==undefined) await pool.query('update products set name=$1,updated_at=now() where id=$2',[safeString(b.name,180),id]);
         if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
-        if (b.main_image_url!==undefined) await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[safeString(b.main_image_url,1000)||null,id]);
+        if (b.main_image_url!==undefined) { const img=typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000); if(typeof img==='string'&&img.startsWith('data:image/')&&img.length>1500000)return json(res,400,{error:'Фото завелике. Виберіть менше фото.'}); await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[img||null,id]); }
         if (b.offer_id && (b.retail_price!==undefined||b.purchase_cost!==undefined||b.availability!==undefined)) {
           if (b.retail_price!==undefined && (!Number.isFinite(Number(b.retail_price)) || Number(b.retail_price)<0)) return json(res,400,{error:'Некоректна ціна.'});
           if (b.purchase_cost!==undefined && b.purchase_cost!==null && (!Number.isFinite(Number(b.purchase_cost)) || Number(b.purchase_cost)<0)) return json(res,400,{error:'Некоректна собівартість.'});
