@@ -1,5 +1,6 @@
 import http from 'node:http';
 import pg from 'pg';
+import { randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT || 3000);
@@ -45,6 +46,22 @@ const clean = v => typeof v === 'string' ? v.trim() : '';
 const safeString = (v, max = 160) => clean(v).slice(0, max);
 const validPhone = v => /^[+\d()\s-]{9,20}$/.test(v);
 const requireDb = () => { if (!pool) { const e = new Error('Database not configured'); e.status = 503; throw e; } };
+const hashToken = token => createHash('sha256').update(token).digest('hex');
+const passwordHash = password => scryptSync(password, 'vitrano-customer-v1', 64).toString('hex');
+async function ensureCustomerAuthSchema() {
+  await pool.query('alter table customers add column if not exists password_hash text');
+  await pool.query('alter table customers add column if not exists session_token_hash text');
+  await pool.query('alter table customers add column if not exists session_expires_at timestamptz');
+}
+async function customerFromRequest(req) {
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  const token = auth.slice(7);
+  if (token.length < 32 || token.length > 200) return null;
+  await ensureCustomerAuthSchema();
+  const { rows } = await pool.query('select id,full_name,phone from customers where session_token_hash=$1 and session_expires_at>now() limit 1',[hashToken(token)]);
+  return rows[0] || null;
+}
 
 async function handle(req, res) {
   const origin = req.headers.origin;
@@ -107,6 +124,36 @@ async function handle(req, res) {
       if(!p.rows.length)return json(res,404,{error:'Товар не знайдено.'});
       await pool.query("insert into reviews(product_id,rating,body,status) values($1,$2,$3,'pending')",[publicReviewMatch[1],rating,body||null]);
       return json(res,201,{message:'Дякуємо! Відгук надіслано на перевірку перед публікацією.'});
+    }
+    if (url.pathname.startsWith('/api/customer/')) {
+      requireDb(); await ensureCustomerAuthSchema();
+      if (req.method === 'POST' && url.pathname === '/api/customer/register') {
+        if (rateLimited(req)) return json(res,429,{error:'Забагато спроб. Спробуйте через хвилину.'});
+        const b=await readBody(req), name=safeString(b.full_name,120), phone=safeString(b.phone,30).replace(/[()\\s-]/g,''), password=String(b.password||'');
+        if(name.length<2||!validPhone(phone)||password.length<8||password.length>100) return json(res,400,{error:'Вкажіть ім’я, телефон і пароль від 8 символів.'});
+        const existing=await pool.query('select id,password_hash,exists(select 1 from orders o where o.customer_id=customers.id) as has_orders from customers where phone=$1 limit 1',[phone]);
+        if(existing.rows.length && (existing.rows[0].password_hash || existing.rows[0].has_orders)) return json(res,409,{error:'Цей номер уже пов’язаний із замовленнями або кабінетом. Для безпеки зверніться до підтримки, щоб підтвердити номер.'});
+        const token=randomBytes(32).toString('base64url');
+        const result=await pool.query('insert into customers(full_name,phone,password_hash,session_token_hash,session_expires_at) values($1,$2,$3,$4,now()+interval \'30 days\') on conflict(phone) do update set full_name=excluded.full_name,password_hash=excluded.password_hash,session_token_hash=excluded.session_token_hash,session_expires_at=excluded.session_expires_at,updated_at=now() returning id,full_name,phone',[name,phone,passwordHash(password),hashToken(token)]);
+        return json(res,201,{token,customer:result.rows[0]});
+      }
+      if (req.method === 'POST' && url.pathname === '/api/customer/login') {
+        if (rateLimited(req)) return json(res,429,{error:'Забагато спроб. Спробуйте пізніше.'});
+        const b=await readBody(req), phone=safeString(b.phone,30).replace(/[()\\s-]/g,''), password=String(b.password||'');
+        const {rows}=await pool.query('select id,full_name,phone,password_hash from customers where phone=$1 and password_hash is not null limit 1',[phone]);
+        const supplied=Buffer.from(passwordHash(password));
+        if(!rows.length||supplied.length!==Buffer.from(rows[0].password_hash).length||!timingSafeEqual(supplied,Buffer.from(rows[0].password_hash))) return json(res,401,{error:'Невірний номер телефону або пароль.'});
+        const token=randomBytes(32).toString('base64url');
+        await pool.query('update customers set session_token_hash=$1,session_expires_at=now()+interval \'30 days\' where id=$2',[hashToken(token),rows[0].id]);
+        return json(res,200,{token,customer:{id:rows[0].id,full_name:rows[0].full_name,phone:rows[0].phone}});
+      }
+      if (req.method === 'POST' && url.pathname === '/api/customer/logout') { const customer=await customerFromRequest(req); if(customer) await pool.query('update customers set session_token_hash=null,session_expires_at=null where id=$1',[customer.id]); return json(res,200,{ok:true}); }
+      if (req.method === 'GET' && url.pathname === '/api/customer/me') {
+        const customer=await customerFromRequest(req); if(!customer)return json(res,401,{error:'Увійдіть до кабінету.'});
+        const {rows}=await pool.query('select o.id,o.order_number,o.status,o.subtotal,o.created_at,o.carrier,o.city,o.branch,o.ttn,coalesce((select json_agg(json_build_object(\'name\',i.product_name_snapshot,\'quantity\',i.quantity,\'unit_price\',i.unit_price,\'line_total\',i.line_total)) from order_items i where i.order_id=o.id),\'[]\'::json) as items from orders o where o.customer_id=$1 order by o.created_at desc limit 50',[customer.id]);
+        return json(res,200,{customer,orders:rows});
+      }
+      return json(res,404,{error:'Маршрут кабінету не знайдено.'});
     }
     if (req.method === 'POST' && url.pathname === '/api/orders') {
       if (rateLimited(req)) return json(res, 429, { error: 'Забагато спроб. Спробуйте пізніше.' });
