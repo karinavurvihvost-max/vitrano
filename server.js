@@ -73,7 +73,7 @@ async function handle(req, res) {
       if (category) { params.push(category); filters.push(`c.slug=$${params.length}`); }
       const { rows } = await pool.query(`
         select p.id,p.sku,p.name,p.slug,p.description,p.characteristics,p.category_id,p.image_urls,p.main_image_url,
-          case when c.id is null then null else json_build_object('name',c.name,'slug',c.slug) end as category,
+          case when c.id is null then null else json_build_object('name',c.name,'slug',c.slug) end as categories,
           coalesce(json_agg(json_build_object('id',o.id,'supplier_id',o.supplier_id,'supplier_name',s.name,'retail_price',o.retail_price,'availability',o.availability,'last_checked_at',o.last_checked_at))
             filter (where o.id is not null and o.retail_price is not null), '[]'::json) as offers
         from products p left join categories c on c.id=p.category_id
