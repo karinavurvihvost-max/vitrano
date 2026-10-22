@@ -150,8 +150,16 @@ async function handle(req, res) {
       if (req.method === 'POST' && url.pathname === '/api/customer/logout') { const customer=await customerFromRequest(req); if(customer) await pool.query('update customers set session_token_hash=null,session_expires_at=null where id=$1',[customer.id]); return json(res,200,{ok:true}); }
       if (req.method === 'GET' && url.pathname === '/api/customer/me') {
         const customer=await customerFromRequest(req); if(!customer)return json(res,401,{error:'Увійдіть до кабінету.'});
-        const {rows}=await pool.query('select o.id,o.order_number,o.status,o.subtotal,o.created_at,o.carrier,o.city,o.branch,o.ttn,coalesce((select json_agg(json_build_object(\'name\',i.product_name_snapshot,\'quantity\',i.quantity,\'unit_price\',i.unit_price,\'line_total\',i.line_total)) from order_items i where i.order_id=o.id),\'[]\'::json) as items from orders o where o.customer_id=$1 order by o.created_at desc limit 50',[customer.id]);
+        const {rows}=await pool.query('select o.id,o.order_number,o.status,o.payment_status,o.delivery_status,o.subtotal,o.created_at,o.carrier,o.region,o.city,o.branch,o.ttn,coalesce((select json_agg(json_build_object(\'name\',i.product_name_snapshot,\'quantity\',i.quantity,\'unit_price\',i.unit_price,\'line_total\',i.line_total)) from order_items i where i.order_id=o.id),\'[]\'::json) as items from orders o where o.customer_id=$1 order by o.created_at desc limit 50',[customer.id]);
         return json(res,200,{customer,orders:rows});
+      }
+      if (req.method === 'PATCH' && url.pathname === '/api/customer/profile') {
+        const customer=await customerFromRequest(req);
+        if(!customer)return json(res,401,{error:'Увійдіть до кабінету.'});
+        const b=await readBody(req), name=safeString(b.full_name,120);
+        if(name.length<3)return json(res,400,{error:'Вкажіть ім’я та прізвище.'});
+        const {rows}=await pool.query('update customers set full_name=$1,updated_at=now() where id=$2 returning id,full_name,phone',[name,customer.id]);
+        return json(res,200,{customer:rows[0],message:'Профіль збережено.'});
       }
       return json(res,404,{error:'Маршрут кабінету не знайдено.'});
     }
