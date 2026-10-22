@@ -205,6 +205,18 @@ async function handle(req, res) {
         ]);
         return json(res,200,{products:p.rows[0].count,orders:o.rows[0].count,suppliers:s.rows[0].count,revenue:fin.rows[0].revenue});
       }
+      if(req.method==='GET'&&url.pathname==='/api/admin/reviews'){
+        const {rows}=await pool.query("select r.id,r.product_id,r.rating,r.body,r.status,r.admin_reply,r.created_at,p.name as product_name,coalesce(c.full_name,'Покупець') as customer_name from reviews r join products p on p.id=r.product_id left join customers c on c.id=r.customer_id order by case when r.status='pending' then 0 else 1 end,r.created_at desc limit 300");
+        return json(res,200,{reviews:rows});
+      }
+      const reviewAdminMatch=url.pathname.match(/^\/api\/admin\/reviews\/([0-9a-f-]{36})$/i);
+      if(req.method==='PATCH'&&reviewAdminMatch){
+        const b=await readBody(req),status=safeString(b.status,20),reply=safeString(b.admin_reply,1200);
+        if(!['pending','approved','rejected'].includes(status))return json(res,400,{error:'Некоректний статус відгуку.'});
+        await pool.query('update reviews set status=$1,admin_reply=$2 where id=$3',[status,reply||null,reviewAdminMatch[1]]);
+        await pool.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)',['review.moderate','review',reviewAdminMatch[1],JSON.stringify({status})]);
+        return json(res,200,{message:'Відгук оновлено.'});
+      }
       if (req.method === 'GET' && url.pathname === '/api/admin/products') {
         const {rows}=await pool.query(`select p.id,p.sku,p.name,p.slug,p.description,p.characteristics,p.category_id,p.image_urls,p.main_image_url,p.is_visible,c.name as category,c.slug as category_slug,
           coalesce(json_agg(json_build_object('id',o.id,'supplier_id',o.supplier_id,'supplier_name',s.name,'retail_price',o.retail_price,'purchase_cost',o.purchase_cost,'availability',o.availability,'is_active',o.is_active)) filter(where o.id is not null),'[]'::json) as offers
