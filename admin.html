@@ -1,5 +1,52 @@
 <!doctype html><html lang="uk"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VITRANO Admin</title><style>
 body{margin:0;background:#edf5ff;color:#142746;font:16px system-ui}main{max-width:1000px;margin:auto;padding:16px}header,.row,.tabs{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}.brand{color:#0869ed;font-weight:900;font-size:24px;letter-spacing:2px}.card{background:#ffffffdf;border:1px solid white;border-radius:17px;padding:16px;margin:12px 0}h1{font-size:23px}h2{font-size:19px}input,select,textarea,button{font:inherit;border:1px solid #dfe8f5;border-radius:10px;padding:10px;background:white;color:#142746;max-width:100%}input,select,textarea{width:100%;box-sizing:border-box;margin-top:5px}button{cursor:pointer;font-weight:650}.primary,.active{background:#0869ed;color:white;border-color:#0869ed}.grid,.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.stat{background:#f5f8ff;border:1px solid #dfe8f5;border-radius:12px;padding:12px}.stat small{display:block;color:#71839d}.stat b{font-size:20px}.tabs{justify-content:flex-start;overflow:auto;margin:12px 0}.wrap{overflow:visible}.product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:stretch}.product-card{position:relative;display:flex;flex-direction:column;background:linear-gradient(155deg,#fff,#f7faff);border:1px solid #e0e9f7;border-radius:16px;padding:8px;min-width:0;box-shadow:0 4px 14px #183c680c;overflow:hidden}.product-card:before{content:'';height:4px;position:absolute;top:0;left:0;right:0;background:linear-gradient(90deg,#0869ed,#54c8f5,#9b7bff)}.product-card img{width:100%;aspect-ratio:5/3;object-fit:cover;border-radius:11px;background:#f3f7fd;display:block}.product-card h3{font-size:15px;line-height:1.2;margin:8px 0 3px;overflow-wrap:anywhere;letter-spacing:-.2px}.product-card .product-price{font-weight:800;font-size:14px;line-height:1.25;margin:7px 0;color:#142746;overflow-wrap:anywhere}.product-card label{font-size:11px;color:#71839d;display:block;margin-top:6px;font-weight:650}.product-card select{font-size:12px;padding:7px 6px;border-radius:10px}.product-card .actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.product-card .actions button{flex:1;font-size:11px;padding:8px 3px;border-radius:10px;min-width:0}.stock-line{background:#f3f7fd;border:1px solid #e4ecf8;border-radius:11px;padding:7px;margin-top:6px}.stock-title{font-size:12px;font-weight:800;color:#496181}.publication-box{border-top:1px dashed #dce6f5;margin-top:8px;padding-top:6px}.empty-card{grid-column:1/-1;padding:20px;text-align:center;color:#71839d}@media(max-width:360px){.product-grid{gap:8px}.product-card{padding:8px}.product-card h3{font-size:14px}.product-card .product-price{font-size:16px}}.muted{color:#71839d;font-size:13px}.hidden{display:none!important}.notice{background:#eaf4ff;border-radius:10px;padding:10px;white-space:pre-wrap}@media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}main{padding:10px}}
+
+/* MarketMix-inspired mobile admin refresh */
+:root{color-scheme:light}
+body{background:radial-gradient(ellipse at 0% 0%,#d9eaff 0,transparent 42%),linear-gradient(145deg,#edf5ff,#f7faff 62%,#e7f1ff);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;padding:clamp(10px,2.5vw,24px)}
+header{background:#ffffffd9;border:1px solid #fff;border-radius:22px;padding:14px 18px;box-shadow:0 10px 28px #153b6810}
+.brand{letter-spacing:1.5px;font-size:25px}
+.card{background:#ffffffed;border:1px solid #ffffff;border-radius:22px;padding:clamp(12px,2.5vw,22px);margin:14px 0;box-shadow:0 10px 30px #183c680d}
+h1,h2,h3{letter-spacing:-.45px}
+.stats{gap:10px}.stat{border-radius:17px;padding:14px;background:linear-gradient(145deg,#f8faff,#eef4ff);border-color:#e0e9f6}.stat b{font-size:clamp(19px,3vw,25px)}
+.tabs{display:flex;flex-wrap:wrap;overflow:visible;gap:8px;padding:2px 0 6px}
+.tabs button{border-radius:14px;padding:11px 15px;background:#fff;border:1px solid #dfe8f5;box-shadow:0 3px 10px #173b6508;white-space:nowrap}
+.tabs button.active,.tabs button.primary{background:linear-gradient(135deg,#1680ff,#075bd7);color:#fff;border-color:transparent;box-shadow:0 7px 18px #0869ed30}
+button{transition:transform .15s ease,box-shadow .15s ease}button:active{transform:scale(.98)}
+input,select,textarea{border-radius:13px;padding:12px 13px;border-color:#dce6f4;background:#fbfdff;min-height:44px}
+input:focus,select:focus,textarea:focus{outline:3px solid #1680ff26;border-color:#1680ff}
+.primary{background:linear-gradient(135deg,#1680ff,#075bd7);border-color:transparent;border-radius:13px;box-shadow:0 6px 16px #0869ed25}
+.product-grid{gap:12px}
+.product-card{border-radius:18px;padding:11px;background:linear-gradient(155deg,#fff,#f6f9ff);box-shadow:0 7px 20px #183c680d}
+.product-card:before{height:4px;background:linear-gradient(90deg,#0877f9,#45c9ef,#8876ff)}
+.product-card img{border-radius:13px}
+.notice{border:1px solid #d7e9ff;background:linear-gradient(135deg,#eef7ff,#e6f2ff);border-radius:14px}
+.wrap{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;border-radius:16px;-webkit-overflow-scrolling:touch}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:780px;background:#fff;border-radius:16px;overflow:hidden}
+th{background:#edf4ff;color:#365477;font-size:13px;text-align:left}
+th,td{padding:12px 10px;border-bottom:1px solid #e8eef7;vertical-align:top}
+td{font-size:14px;line-height:1.45}
+tr:last-child td{border-bottom:0}
+td select,td input{min-width:105px;margin:0}
+td button{white-space:nowrap}
+#orders .wrap:before{content:'Прокрути таблицю вбік, щоб побачити всі поля';display:block;padding:8px 10px;color:#6d829e;font-size:12px}
+@media(max-width:600px){
+ main{padding:9px}
+ header{border-radius:18px;padding:12px}
+ .brand{font-size:22px}
+ .card{border-radius:18px;padding:12px;margin:10px 0}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .stat{padding:11px;border-radius:15px}.stat b{font-size:20px;overflow-wrap:anywhere}
+ .tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .tabs button{font-size:14px;padding:11px 7px;white-space:normal;min-width:0}
+ .grid{grid-template-columns:1fr}
+ .product-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .product-card{padding:8px;border-radius:15px}
+ .product-card h3{font-size:14px}
+ .product-card .actions button{font-size:11px}
+ #orders h2{margin-top:2px}
+}
 </style><main><header><div><div class="brand">VITRANO</div><div class="muted">Адміністрування магазину</div></div><a href="/" style="color:#0869ed">До магазину ↗</a></header>
 <section class="card"><b>Режим розробки</b><p class="muted">Адмін-панель тимчасово відкрита без пароля. Не публікуйте посилання, поки цей режим увімкнено.</p></section>
 <section id="app"><div class="card"><div class="row"><h1>Панель керування</h1><button id="refresh" class="primary">Оновити</button><button id="logout">Вийти</button></div><div class="stats" id="stats"></div><p id="msg" class="notice hidden"></p></div>
