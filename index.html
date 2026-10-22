@@ -53,7 +53,7 @@ function openCartWindow(){document.querySelector('#cartmodal').classList.add('sh
 function closeCartWindow(){document.querySelector('#cartmodal').classList.remove('show');document.body.style.overflow=''}
 let sectionRestore=[];
 function openSectionWindow(where){
- closeSectionWindow(false);showStore();const body=document.querySelector('#sectionbody');body.innerHTML='';sectionRestore=[];
+ closeSectionWindow(true);showStore();const body=document.querySelector('#sectionbody');body.innerHTML='';sectionRestore=[];
  const title=document.querySelector('#sectiontitle');
  const move=(node)=>{if(!node)return;const placeholder=document.createComment('vitrano-section-placeholder');node.parentNode.insertBefore(placeholder,node);sectionRestore.push({node,placeholder});body.appendChild(node);};
  if(where==='home'){title.textContent='Головна';const sections=[...document.querySelectorAll('#storefront .section')];move(document.querySelector('.hero'));move(sections[0]);move(sections[3]);}
