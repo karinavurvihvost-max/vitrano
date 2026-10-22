@@ -79,15 +79,34 @@ async function handle(req, res) {
       if (category) { params.push(category); filters.push(`c.slug=$${params.length}`); }
       const { rows } = await pool.query(`
         select p.id,p.sku,p.name,p.slug,p.description,p.characteristics,p.category_id,p.image_urls,p.main_image_url,
+          coalesce(rv.average_rating,0)::numeric(2,1) as average_rating,coalesce(rv.review_count,0)::int as review_count,
           case when c.id is null then null else json_build_object('name',c.name,'slug',c.slug) end as categories,
           coalesce(json_agg(json_build_object('id',o.id,'supplier_id',o.supplier_id,'supplier_name',s.name,'retail_price',o.retail_price,'availability',o.availability,'last_checked_at',o.last_checked_at))
             filter (where o.id is not null and o.retail_price is not null), '[]'::json) as offers
         from products p left join categories c on c.id=p.category_id
         left join supplier_offers o on o.product_id=p.id and o.is_active=true
         left join suppliers s on s.id=o.supplier_id and s.is_active=true
+        left join (select product_id,avg(rating)::numeric(2,1) as average_rating,count(*)::int as review_count from reviews where status='approved' group by product_id) rv on rv.product_id=p.id
         where ${filters.join(' and ')}
-        group by p.id,c.id order by p.name asc limit 100`, params);
+        group by p.id,c.id,rv.average_rating,rv.review_count order by p.name asc limit 100`, params);
       return json(res, 200, { products: rows.filter(p => p.offers.length > 0) });
+    }
+    const publicReviewMatch=url.pathname.match(/^\/api\/products\/([0-9a-f-]{36})\/reviews$/i);
+    if(publicReviewMatch&&req.method==='GET'){
+      requireDb();
+      const {rows}=await pool.query("select r.id,r.rating,r.body,r.admin_reply,r.created_at,coalesce(c.full_name,'Покупець') as customer_name from reviews r left join customers c on c.id=r.customer_id where r.product_id=$1 and r.status='approved' order by r.created_at desc limit 50",[publicReviewMatch[1]]);
+      return json(res,200,{reviews:rows});
+    }
+    if(publicReviewMatch&&req.method==='POST'){
+      if(rateLimited(req))return json(res,429,{error:'Забагато спроб. Спробуйте пізніше.'});
+      requireDb();
+      const b=await readBody(req),rating=Number(b.rating),body=safeString(b.body,1200);
+      if(!Number.isInteger(rating)||rating<1||rating>5)return json(res,400,{error:'Оберіть оцінку від 1 до 5 зірок.'});
+      if(body.length>1200)return json(res,400,{error:'Відгук задовгий.'});
+      const p=await pool.query('select id from products where id=$1 and is_visible=true',[publicReviewMatch[1]]);
+      if(!p.rows.length)return json(res,404,{error:'Товар не знайдено.'});
+      await pool.query("insert into reviews(product_id,rating,body,status) values($1,$2,$3,'pending')",[publicReviewMatch[1],rating,body||null]);
+      return json(res,201,{message:'Дякуємо! Відгук надіслано на перевірку перед публікацією.'});
     }
     if (req.method === 'POST' && url.pathname === '/api/orders') {
       if (rateLimited(req)) return json(res, 429, { error: 'Забагато спроб. Спробуйте пізніше.' });
