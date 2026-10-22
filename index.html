@@ -59,6 +59,24 @@ button{touch-action:manipulation}
 <nav class="bottomnav"><button class="navitem active" data-go="home"><span>⌂</span>Головна</button><button class="navitem" data-go="catalog"><span>⊞</span>Каталог</button><button class="navitem" data-go="cart"><span>🛒</span>Кошик</button><button class="navitem" data-go="favorites"><span>♡</span>Обране</button><button class="navitem" data-go="admin"><span>♙</span>Профіль</button></nav>
 <div class="modal-backdrop" id="detail"><div class="modal" id="detailcontent"></div></div><div class="modal-backdrop" id="cartmodal" onclick="if(event.target===this)closeCartWindow()"><div class="modal" id="cartwindow"><div class="modal-head"><h2 style="margin:0">🛒 Кошик</h2><button class="iconbtn" onclick="closeCartWindow()" aria-label="Закрити">×</button></div><p class="muted">Товари, кількість і сума замовлення</p><div class="panel"><div class="notice">📦 Замовлення зі складів оформлюються окремо.</div><div id="cartmodalitems"></div></div><div class="panel" style="margin-top:12px"><h3>Оформлення замовлення</h3><div class="muted">Заповніть дані лише після запуску реального оформлення.</div><form id="cartmodalform" class="form"><input class="field wide" name="name" placeholder="Ім’я та прізвище"><input class="field wide" name="phone" placeholder="Номер телефону"><select class="field wide" name="delivery"><option>Нова пошта</option><option>Укрпошта</option></select><input class="field wide" name="city" placeholder="Місто"><input class="field wide" name="branch" placeholder="Відділення або поштомат"><button class="primary wide" type="submit">Оформити замовлення</button></form><p id="cartmodalresult" class="notice hidden"></p></div></div></div><div class="modal-backdrop" id="sectionmodal" onclick="if(event.target===this)closeSectionWindow()"><div class="modal" id="sectionwindow"><div class="modal-head"><h2 id="sectiontitle" style="margin:0">VITRANO</h2><button class="iconbtn" onclick="closeSectionWindow()" aria-label="Закрити">×</button></div><div id="sectionbody"></div></div></div>
 <script>
+window.addEventListener('error',function(e){
+ try{
+  const badge=document.querySelector('#mode-label');
+  if(badge)badge.textContent='ПОМИЛКА JAVASCRIPT';
+  const box=document.querySelector('#products');
+  if(box)box.innerHTML='<div class="panel" role="alert"><h3>Помилка запуску сторінки</h3><p>'+String(e.message||'Невідома помилка').replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]})+'</p><p class="muted">Рядок: '+String(e.lineno||'?')+'. Ми вже можемо визначити місце помилки.</p></div>';
+ }catch(_){}
+});
+window.addEventListener('unhandledrejection',function(e){
+ try{
+  const badge=document.querySelector('#mode-label');
+  if(badge)badge.textContent='ПОМИЛКА ЗАПИТУ';
+  const box=document.querySelector('#products');
+  if(box)box.innerHTML='<div class="panel" role="alert"><h3>Помилка виконання запиту</h3><p>'+String(e.reason&&e.reason.message||e.reason||'Невідома помилка')+'</p></div>';
+ }catch(_){}
+});
+</script>
+<script>
 
 const categories=[['Усі товари','✦'],['Для дому','⌂'],['Краса','♧'],['Електроніка','▣'],['Діти','♧'],['Товари для кухні','♨']];
 const demoProducts=[
