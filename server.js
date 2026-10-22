@@ -113,9 +113,9 @@ async function handle(req, res) {
       requireDb();
       const body = await readBody(req);
       const customer_name = safeString(body.customer_name,120), customer_phone = safeString(body.customer_phone,30);
-      const carrier = body.carrier, city = safeString(body.city,100), branch = safeString(body.branch,160);
+      const carrier = body.carrier, region = safeString(body.region,100), city = safeString(body.city,100), branch = safeString(body.branch,160);
       const items = Array.isArray(body.items) ? body.items : [];
-      if (customer_name.length < 3 || !validPhone(customer_phone) || !['nova_poshta','ukrposhta'].includes(carrier) || city.length < 2 || branch.length < 2)
+      if (customer_name.length < 3 || !validPhone(customer_phone) || !['nova_poshta','ukrposhta'].includes(carrier) || region.length < 2 || city.length < 2 || branch.length < 1)
         return json(res,400,{error:'Перевірте ім’я, телефон, спосіб доставки, місто та відділення.'});
       if (!items.length || items.length > 50) return json(res,400,{error:'Кошик порожній або містить забагато позицій.'});
       const merged = new Map();
@@ -152,10 +152,10 @@ async function handle(req, res) {
           on conflict(phone) do update set full_name=excluded.full_name,updated_at=now()
           returning id`,[customer_name,customer_phone]);
         const { rows: orders } = await client.query(`
-          insert into orders(customer_id,customer_name,customer_phone,carrier,city,branch,supplier_id,status,payment_status,delivery_status,subtotal)
-          values($1,$2,$3,$4,$5,$6,$7,'new','unpaid','not_shipped',$8)
+          insert into orders(customer_id,customer_name,customer_phone,carrier,region,city,branch,supplier_id,status,payment_status,delivery_status,subtotal)
+          values($1,$2,$3,$4,$5,$6,$7,$8,'new','unpaid','not_shipped',$9)
           returning id,order_number,status,subtotal,created_at`,
-          [customerRows[0].id,customer_name,customer_phone,carrier,city,branch,offers[0].supplier_id,subtotal]);
+          [customerRows[0].id,customer_name,customer_phone,carrier,region,city,branch,offers[0].supplier_id,subtotal]);
         const order=orders[0];
         for (const id of ids) {
           const o=byId.get(id);
