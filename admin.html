@@ -47,6 +47,31 @@ td button{white-space:nowrap}
  .product-card .actions button{font-size:11px}
  #orders h2{margin-top:2px}
 }
+
+/* Order cards instead of cramped desktop table */
+#orders .wrap.order-list{overflow:visible;border-radius:0}
+#orders .wrap.order-list:before{display:none}
+#orders table{display:block;width:100%;min-width:0;background:transparent;border-radius:0;overflow:visible;border-spacing:0}
+#orders table thead{display:none}
+#orders table tbody{display:grid;grid-template-columns:1fr;gap:14px}
+#orders .order-row{display:block;background:transparent}
+#orders .order-row>td{display:block;padding:0;border:0}
+.order-card{background:linear-gradient(145deg,#fff,#f7faff);border:1px solid #e0eafa;border-radius:20px;padding:15px;box-shadow:0 8px 24px #163a650e;overflow:hidden;min-width:0}
+.order-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:13px;border-bottom:1px solid #e7eef8}
+.order-top h3{font-size:22px;margin:4px 0;color:#142746}
+.order-label{display:block;font-size:10px;letter-spacing:1px;font-weight:850;color:#71839d;margin-bottom:6px}
+.order-date{display:block;font-size:12px;color:#7b8da5}
+.order-total{font-size:22px;color:#087447;white-space:nowrap}
+.order-info{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:14px 0;border-bottom:1px solid #e7eef8}
+.order-info section{display:flex;flex-direction:column;gap:5px;min-width:0;overflow-wrap:anywhere}
+.order-info section b{font-size:14px;line-height:1.35}
+.order-info section a,.order-info section span:not(.order-label){font-size:13px;line-height:1.45;color:#526782;overflow-wrap:anywhere;text-decoration:none}
+.order-items{padding:13px 0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.order-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.order-controls label{display:block;min-width:0;font-size:12px;font-weight:750;color:#526782}
+.order-controls select,.order-controls input{font-size:14px;min-width:0;margin-top:6px;padding:11px 9px}
+.order-save{width:100%;margin-top:12px;padding:13px;border-radius:13px}
+@media(max-width:600px){.order-card{padding:13px;border-radius:18px}.order-total{font-size:19px}.order-info{gap:10px}.order-controls{grid-template-columns:1fr}.order-controls select,.order-controls input{width:100%}}
 </style><main><header><div><div class="brand">VITRANO</div><div class="muted">Адміністрування магазину</div></div><a href="/" style="color:#0869ed">До магазину ↗</a></header>
 <section class="card"><b>Режим розробки</b><p class="muted">Адмін-панель тимчасово відкрита без пароля. Не публікуйте посилання, поки цей режим увімкнено.</p></section>
 <section id="app"><div class="card"><div class="row"><h1>Панель керування</h1><button id="refresh" class="primary">Оновити</button><button id="logout">Вийти</button></div><div class="stats" id="stats"></div><p id="msg" class="notice hidden"></p></div>
@@ -83,7 +108,7 @@ offers.map(o=>'<div class="stock-line"><div class="stock-title">'+esc(o.supplier
 }
 window.saveP=async(id,offer)=>{try{let b={is_visible:$('#vis'+id).value==='true'};if(offer){b.offer_id=offer;b.availability=$('#av'+offer).value}await api('/admin/products/'+id,{method:'PATCH',body:JSON.stringify(b)});await load();notice('Зміни збережено.')}catch(e){notice(e.message)}};
 window.priceP=async(id,offer,price,cost)=>{if(!offer)return notice('Немає пропозиції постачальника.');let p=prompt('Роздрібна ціна, грн',price);if(p===null)return;let c=prompt('Собівартість, грн (порожньо — не змінювати)',cost==null?'':cost);if(c===null)return;try{let b={offer_id:offer,retail_price:Number(p)};if(c.trim()!=='')b.purchase_cost=Number(c);await api('/admin/products/'+id,{method:'PATCH',body:JSON.stringify(b)});await load();notice('Ціни оновлено.')}catch(e){notice(e.message)}};
-function renderOrders(){let sts=[['new','Нове'],['checking','Перевіряється'],['confirmed','Підтверджено'],['sent_to_supplier','Постачальнику'],['shipped','Відправлено'],['delivered','Доставлено'],['cancelled','Скасовано'],['returned','Повернення']];$('#or').innerHTML=orders.map(o=>'<tr><td><b>№'+esc(o.order_number)+'</b><br>'+money(o.subtotal)+'<div class="muted">'+new Date(o.created_at).toLocaleString('uk-UA')+'</div></td><td>'+esc(o.customer_name)+'<br>'+esc(o.customer_phone)+'</td><td>'+esc(o.carrier==='ukrposhta'?'Укрпошта':'Нова пошта')+'<br>'+esc(o.city)+'<br>'+esc(o.branch)+'</td><td>'+esc((o.items||[]).map(i=>i.name+' × '+i.quantity).join(', '))+'</td><td><select id="st'+o.id+'">'+sts.map(s=>'<option value="'+s[0]+'" '+(o.status===s[0]?'selected':'')+'>'+s[1]+'</option>').join('')+'</select><input id="ttn'+o.id+'" placeholder="ТТН" value="'+esc(o.ttn||'')+'"></td><td><button onclick="saveO(\''+o.id+'\')">Зберегти</button></td></tr>').join('')||'<tr><td colspan="6">Замовлень поки немає.</td></tr>'}
+function renderOrders(){let sts=[['new','Нове'],['checking','Перевіряється'],['confirmed','Підтверджено'],['sent_to_supplier','Постачальнику'],['shipped','Відправлено'],['delivered','Доставлено'],['cancelled','Скасовано'],['returned','Повернення']];const box=$('#or');const wrap=box.closest('.wrap');if(wrap)wrap.classList.add('order-list');box.innerHTML=orders.map(o=>'<tr class="order-row"><td colspan="6"><article class="order-card"><div class="order-top"><div><span class="order-label">ЗАМОВЛЕННЯ</span><h3>№'+esc(o.order_number)+'</h3><span class="order-date">'+new Date(o.created_at).toLocaleString('uk-UA')+'</span></div><strong class="order-total">'+money(o.subtotal)+'</strong></div><div class="order-info"><section><span class="order-label">ПОКУПЕЦЬ</span><b>'+esc(o.customer_name)+'</b><a href="tel:'+esc(o.customer_phone)+'">'+esc(o.customer_phone)+'</a></section><section><span class="order-label">ДОСТАВКА</span><b>🚚 '+esc(o.carrier==='ukrposhta'?'Укрпошта':'Нова пошта')+'</b><span>'+esc([o.region,o.city,o.branch].filter(Boolean).join(', ')||'Адресу не вказано')+'</span></section></div><div class="order-items"><span class="order-label">ТОВАРИ</span><div>'+esc((o.items||[]).map(i=>i.name+' × '+i.quantity).join(' · ')||'Немає даних')+'</div></div><div class="order-controls"><label>Статус<select id="st'+o.id+'">'+sts.map(s=>'<option value="'+s[0]+'" '+(o.status===s[0]?'selected':'')+'>'+s[1]+'</option>').join('')+'</select></label><label>ТТН Нової пошти<input id="ttn'+o.id+'" inputmode="numeric" placeholder="Введіть номер ТТН" value="'+esc(o.ttn||'')+'"></label></div><button class="primary order-save" onclick="saveO(\''+o.id+'\')">Зберегти зміни</button></article></td></tr>').join('')||'<tr><td colspan="6"><div class="empty-card">📦 Замовлень поки немає.</div></td></tr>'}
 window.saveO=async id=>{try{await api('/admin/orders/'+id,{method:'PATCH',body:JSON.stringify({status:$('#st'+id).value,ttn:$('#ttn'+id).value.trim()})});await load();notice('Замовлення оновлено.')}catch(e){notice(e.message)}};
 $('#supplierMode').onchange=()=>{const mode=$('#supplierMode').value,both=mode==='both',second=mode==='Склад 2';$('#price1wrap').classList.toggle('hidden',second);$('#price1').required=!second;$('#price2wrap').classList.toggle('hidden',!both);$('#price2').required=both};$('#supplierMode').dispatchEvent(new Event('change'));
 $('#photoFile').onchange=async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;try{const data=await compressPhoto(file);$('#form [name="main_image_url"]').value=data;$('#photoPreview').innerHTML='<img src="'+data+'" alt="Попередній перегляд фото" style="display:block;max-width:180px;max-height:180px;object-fit:contain;border-radius:12px;margin-top:8px"><span>Фото готове до збереження</span>'}catch(err){$('#photoPreview').textContent=err.message;$('#form [name="main_image_url"]').value=''}};
