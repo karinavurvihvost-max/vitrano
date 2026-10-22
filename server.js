@@ -143,6 +143,123 @@ async function handle(req, res) {
       } catch (e) { await client.query('ROLLBACK').catch(()=>{}); throw e; }
       finally { client.release(); }
     }
+
+    if (url.pathname.startsWith('/api/admin/')) {
+      requireDb();
+      const configured = process.env.ADMIN_API_TOKEN || '';
+      if (!configured) return json(res,503,{error:'Адмін-доступ ще не налаштований.'});
+      if ((req.headers.authorization || '') !== 'Bearer ' + configured) return json(res,401,{error:'Потрібна авторизація адміністратора.'});
+      if (req.method === 'GET' && url.pathname === '/api/admin/overview') {
+        const [p,o,s,fin] = await Promise.all([
+          pool.query('select count(*)::int as count from products'),
+          pool.query('select count(*)::int as count from orders'),
+          pool.query('select count(*)::int as count from suppliers where is_active=true'),
+          pool.query("select coalesce(sum(subtotal),0)::numeric(12,2) as revenue from orders where status <> 'cancelled'")
+        ]);
+        return json(res,200,{products:p.rows[0].count,orders:o.rows[0].count,suppliers:s.rows[0].count,revenue:fin.rows[0].revenue});
+      }
+      if (req.method === 'GET' && url.pathname === '/api/admin/products') {
+        const {rows}=await pool.query(`select p.id,p.sku,p.name,p.slug,p.description,p.characteristics,p.category_id,p.image_urls,p.main_image_url,p.is_visible,c.name as category,c.slug as category_slug,
+          coalesce(json_agg(json_build_object('id',o.id,'supplier_id',o.supplier_id,'supplier_name',s.name,'retail_price',o.retail_price,'purchase_cost',o.purchase_cost,'availability',o.availability,'is_active',o.is_active)) filter(where o.id is not null),'[]'::json) as offers
+          from products p left join categories c on c.id=p.category_id left join supplier_offers o on o.product_id=p.id left join suppliers s on s.id=o.supplier_id group by p.id,c.id order by p.created_at desc`);
+        return json(res,200,{products:rows});
+      }
+      if (req.method === 'GET' && url.pathname === '/api/admin/orders') {
+        const {rows}=await pool.query(`select o.*,s.name as supplier_name,coalesce((select json_agg(json_build_object('name',i.product_name_snapshot,'quantity',i.quantity,'unit_price',i.unit_price,'line_total',i.line_total)) from order_items i where i.order_id=o.id),'[]'::json) as items from orders o left join suppliers s on s.id=o.supplier_id order by o.created_at desc limit 300`);
+        return json(res,200,{orders:rows});
+      }
+      if (req.method === 'GET' && url.pathname === '/api/admin/suppliers') {
+        const {rows}=await pool.query('select id,name,contact_name,phone,messenger,is_active,notes,created_at from suppliers order by created_at desc');
+        return json(res,200,{suppliers:rows});
+      }
+      if (req.method === 'POST' && url.pathname === '/api/admin/products') {
+        const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), supplier=safeString(b.supplier,160);
+        const price=Number(b.retail_price), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
+        if(name.length<2||!category||!supplier||!Number.isFinite(price)||price<0||(cost!==null&&(!Number.isFinite(cost)||cost<0))) return json(res,400,{error:'Перевірте назву, категорію, постачальника та ціни.'});
+        const slug=(safeString(b.slug,180)||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,170)+'-'+Date.now().toString(36);
+        const client=await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const catSlug=category.toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'other';
+          const cat=await client.query('insert into categories(name,slug) values($1,$2) on conflict(name) do update set name=excluded.name returning id',[category,catSlug]);
+          let sup=await client.query('select id from suppliers where name=$1 order by created_at limit 1',[supplier]);
+          if(!sup.rows.length) sup=await client.query('insert into suppliers(name) values($1) returning id',[supplier]);
+          const p=await client.query('insert into products(sku,name,slug,description,category_id,image_urls,main_image_url,is_visible) values($1,$2,$3,$4,$5,$6,$7,$8) returning id',
+            [safeString(b.sku,80)||null,name,slug,safeString(b.description,3000),cat.rows[0].id,Array.isArray(b.image_urls)?b.image_urls.filter(x=>typeof x==='string'&&/^https:\/\//.test(x)).slice(0,8):[],safeString(b.main_image_url,1000)||null,b.is_visible===true]);
+          await client.query('insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true)',
+            [p.rows[0].id,sup.rows[0].id,cost,price,['available','check','unavailable'].includes(b.availability)?b.availability:'check']);
+          await client.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)', ['product.create','product',p.rows[0].id,JSON.stringify({name})]);
+          await client.query('COMMIT');
+          return json(res,201,{id:p.rows[0].id,message:'Товар створено.'});
+        } catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;} finally{client.release();}
+      }
+      const productMatch=url.pathname.match(/^\/api\/admin\/products\/([0-9a-f-]{36})$/i);
+      if (req.method === 'PATCH' && productMatch) {
+        const b=await readBody(req), id=productMatch[1];
+        if (b.is_visible!==undefined) await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]);
+        if (b.name!==undefined) await pool.query('update products set name=$1,updated_at=now() where id=$2',[safeString(b.name,180),id]);
+        if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
+        if (b.main_image_url!==undefined) await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[safeString(b.main_image_url,1000)||null,id]);
+        if (b.offer_id && (b.retail_price!==undefined||b.purchase_cost!==undefined||b.availability!==undefined)) {
+          const fields=[],vals=[]; if(b.retail_price!==undefined){const n=Number(b.retail_price);if(!Number.isFinite(n)||n<0)return json(res,400,{error:'Некоректна ціна.'});vals.push(n);fields.push('retail_price=
+  } catch (error) {
+    const status=Number(error.status)||500;
+    if(status>=500) console.error('API error:',error.message);
+    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
+  }
+}
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
++vals.length)}
+          if(b.purchase_cost!==undefined){const n=b.purchase_cost===null?null:Number(b.purchase_cost);if(n!==null&&(!Number.isFinite(n)||n<0))return json(res,400,{error:'Некоректна собівартість.'});vals.push(n);fields.push('purchase_cost=
+  } catch (error) {
+    const status=Number(error.status)||500;
+    if(status>=500) console.error('API error:',error.message);
+    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
+  }
+}
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
++vals.length)}
+          if(b.availability!==undefined){if(!['available','check','unavailable'].includes(b.availability))return json(res,400,{error:'Некоректний статус наявності.'});vals.push(b.availability);fields.push('availability=
+  } catch (error) {
+    const status=Number(error.status)||500;
+    if(status>=500) console.error('API error:',error.message);
+    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
+  }
+}
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
++vals.length)}
+          vals.push(b.offer_id); await pool.query('update supplier_offers set '+fields.join(',')+',updated_at=now() where id=
+  } catch (error) {
+    const status=Number(error.status)||500;
+    if(status>=500) console.error('API error:',error.message);
+    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
+  }
+}
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
++vals.length,vals);
+        }
+        await pool.query('insert into audit_log(action,entity_type,entity_id) values($1,$2,$3)',['product.update','product',id]);
+        return json(res,200,{message:'Зміни збережено.'});
+      }
+      const orderMatch=url.pathname.match(/^\/api\/admin\/orders\/([0-9a-f-]{36})$/i);
+      if(req.method==='PATCH'&&orderMatch){
+        const b=await readBody(req), allowed=['new','checking','confirmed','sent_to_supplier','shipped','delivered','cancelled','returned'];
+        if(!allowed.includes(b.status))return json(res,400,{error:'Некоректний статус замовлення.'});
+        const delivery=b.status==='shipped'?'shipped':b.status==='delivered'?'delivered':b.status==='returned'?'returned':b.status==='cancelled'?'not_shipped':null;
+        await pool.query('update orders set status=$1,ttn=coalesce($2,ttn),delivery_status=coalesce($3,delivery_status),updated_at=now() where id=$4',
+          [b.status,b.ttn?safeString(b.ttn,80):null,delivery,orderMatch[1]]);
+        await pool.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)',['order.update','order',orderMatch[1],JSON.stringify({status:b.status,ttn:b.ttn||null})]);
+        return json(res,200,{message:'Замовлення оновлено.'});
+      }
+      if(req.method==='GET'&&url.pathname==='/api/admin/finance'){
+        const {rows}=await pool.query(`select count(*)::int as orders_count,coalesce(sum(subtotal) filter(where status<>'cancelled'),0)::numeric(12,2) as gross_revenue,
+          coalesce(sum(subtotal) filter(where status='delivered'),0)::numeric(12,2) as delivered_revenue,
+          coalesce(sum((select sum(coalesce(i.supplier_cost_snapshot,0)*i.quantity) from order_items i where i.order_id=o.id)) filter(where status<>'cancelled'),0)::numeric(12,2) as estimated_cost
+          from orders o`);
+        return json(res,200,{finance:rows[0],note:'Операційні витрати не внесені; чистий прибуток не розраховується.'});
+      }
+      return json(res,404,{error:'Адмін-маршрут не знайдено.'});
+    }
     return json(res,404,{error:'Маршрут не знайдено'});
   } catch (error) {
     const status=Number(error.status)||500;
