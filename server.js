@@ -233,9 +233,9 @@ async function handle(req, res) {
       }
       if (req.method === 'POST' && url.pathname === '/api/admin/products') {
         const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), mode=safeString(b.supplier_mode,40);
-        const price1=b.price_1==null||b.price_1===''?null:Number(b.price_1), price2=b.price_2==null||b.price_2===''?null:Number(b.price_2), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
+        const price1=b.price_1==null||b.price_1===''?null:Number(b.price_1), price2=b.price_2==null||b.price_2===''?null:Number(b.price_2), cost1=b.purchase_cost_1===''||b.purchase_cost_1==null?null:Number(b.purchase_cost_1), cost2=b.purchase_cost_2===''||b.purchase_cost_2==null?null:Number(b.purchase_cost_2), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
         const warehouses=mode==='both'?['Склад 1','Склад 2']:['Склад 1','Склад 2'].includes(mode)?[mode]:[];
-        if(name.length<2||!category||!warehouses.length||(warehouses.includes('Склад 1')&&(!Number.isFinite(price1)||price1<=0))||(warehouses.includes('Склад 2')&&(!Number.isFinite(price2)||price2<=0))||(cost!==null&&(!Number.isFinite(cost)||cost<0))) return json(res,400,{error:'Перевірте назву, склад і ціну для кожного вибраного складу.'});
+        if(name.length<2||!category||!warehouses.length||(warehouses.includes('Склад 1')&&(!Number.isFinite(price1)||price1<=0))||(warehouses.includes('Склад 2')&&(!Number.isFinite(price2)||price2<=0))||(cost!==null&&(!Number.isFinite(cost)||cost<0))||(warehouses.includes('Склад 1')&&cost1!==null&&(!Number.isFinite(cost1)||cost1<0))||(warehouses.includes('Склад 2')&&cost2!==null&&(!Number.isFinite(cost2)||cost2<0))) return json(res,400,{error:'Перевірте назву, постачальника, ціну продажу та ціну постачальника.'});
         const slug=(safeString(b.slug,180)||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,170)+'-'+Date.now().toString(36);
         const client=await pool.connect();
         try {
@@ -247,9 +247,9 @@ async function handle(req, res) {
           for (const warehouse of warehouses) {
             let sup=await client.query('select id from suppliers where name=$1 order by created_at limit 1',[warehouse]);
             if(!sup.rows.length) sup=await client.query('insert into suppliers(name) values($1) returning id',[warehouse]);
-            const price=warehouse==='Склад 1'?price1:price2;
+            const price=warehouse==='Склад 1'?price1:price2, offerCost=warehouse==='Склад 1'?(cost1===null?cost:cost1):(cost2===null?cost:cost2);
             await client.query('insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true)',
-              [p.rows[0].id,sup.rows[0].id,cost,price,['available','check','unavailable'].includes(b.availability)?b.availability:'check']);
+              [p.rows[0].id,sup.rows[0].id,offerCost,price,['available','check','unavailable'].includes(b.availability)?b.availability:'check']);
           }
           await client.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)', ['product.create','product',p.rows[0].id,JSON.stringify({name})]);
           await client.query('COMMIT');
