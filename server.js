@@ -60,6 +60,11 @@ async function handle(req, res) {
       if (pool) { try { await pool.query('select 1'); databaseConnected = true; } catch {} }
       return json(res, 200, { ok: true, service: 'vitrano-api', databaseConfigured: Boolean(pool), databaseConnected });
     }
+    if (req.method === 'GET' && url.pathname === '/api/storefront-settings') {
+      requireDb();
+      const {rows}=await pool.query("select setting_value from storefront_settings where setting_key='hero_banner' limit 1");
+      return json(res,200,{hero_banner:rows[0]?.setting_value||{}});
+    }
     if (req.method === 'GET' && url.pathname === '/api/categories') {
       requireDb();
       const { rows } = await pool.query('select id,name,slug,sort_order from categories where is_visible=true order by sort_order,name');
@@ -151,6 +156,26 @@ async function handle(req, res) {
       if (!OPEN_ADMIN_ACCESS) {
         if (!configured) return json(res,503,{error:'Адмін-доступ ще не налаштований.'});
         if ((req.headers.authorization || '') !== 'Bearer ' + configured) return json(res,401,{error:'Потрібна авторизація адміністратора.'});
+      }
+      if (req.method === 'GET' && url.pathname === '/api/admin/storefront-settings') {
+        const {rows}=await pool.query("select setting_value from storefront_settings where setting_key='hero_banner' limit 1");
+        return json(res,200,{hero_banner:rows[0]?.setting_value||{}});
+      }
+      if (req.method === 'PATCH' && url.pathname === '/api/admin/storefront-settings') {
+        const b=await readBody(req);
+        const value={
+          eyebrow:safeString(b.eyebrow,100),
+          title:safeString(b.title,180),
+          description:safeString(b.description,500),
+          button_text:safeString(b.button_text,60),
+          background:['blue','light','dark','purple','green'].includes(b.background)?b.background:'blue',
+          image_url:typeof b.image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.image_url) && b.image_url.length<=1500000 ? b.image_url : ''
+        };
+        if(!value.title||!value.description||!value.button_text)return json(res,400,{error:'Заповніть заголовок, опис і текст кнопки.'});
+        if(typeof b.image_url==='string'&&b.image_url.startsWith('data:image/')&&!value.image_url)return json(res,400,{error:'Фото завелике або формат не підтримується.'});
+        await pool.query("insert into storefront_settings(setting_key,setting_value,updated_at) values('hero_banner',$1::jsonb,now()) on conflict(setting_key) do update set setting_value=excluded.setting_value,updated_at=now()",[JSON.stringify(value)]);
+        await pool.query("insert into audit_log(action,entity_type,details) values($1,$2,$3)",['storefront.banner.update','storefront_settings',JSON.stringify({title:value.title,background:value.background,image_changed:Boolean(value.image_url)})]);
+        return json(res,200,{message:'Головний банер збережено.',hero_banner:value});
       }
       if (req.method === 'GET' && url.pathname === '/api/admin/overview') {
         const [p,o,s,fin] = await Promise.all([
