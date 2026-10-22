@@ -136,7 +136,7 @@ async function hashPassword(password) {
       requireDb(); await ensureCustomerAuthSchema();
       if (req.method === 'POST' && url.pathname === '/api/customer/register') {
         if (rateLimited(req)) return json(res,429,{error:'Забагато спроб. Спробуйте через хвилину.'});
-        const b=await readBody(req), name=safeString(b.full_name,120), phone=safeString(b.phone,30).replace(/[()\\s-]/g,''), password=String(b.password||'');
+        const b=await readBody(req), name=safeString(b.full_name,120), phone=safeString(b.phone,30).replace(/[()\s-]/g,''), password=String(b.password||'');
         if(name.length<2||!validPhone(phone)||password.length<8||password.length>100) return json(res,400,{error:'Вкажіть ім’я, телефон і пароль від 8 символів.'});
         const existing=await pool.query('select id,password_hash,exists(select 1 from orders o where o.customer_id=customers.id) as has_orders from customers where phone=$1 limit 1',[phone]);
         if(existing.rows.length && (existing.rows[0].password_hash || existing.rows[0].has_orders)) return json(res,409,{error:'Цей номер уже пов’язаний із замовленнями або кабінетом. Для безпеки зверніться до підтримки, щоб підтвердити номер.'});
@@ -146,7 +146,7 @@ async function hashPassword(password) {
       }
       if (req.method === 'POST' && url.pathname === '/api/customer/login') {
         if (rateLimited(req)) return json(res,429,{error:'Забагато спроб. Спробуйте пізніше.'});
-        const b=await readBody(req), phone=safeString(b.phone,30).replace(/[()\\s-]/g,''), password=String(b.password||'');
+        const b=await readBody(req), phone=safeString(b.phone,30).replace(/[()\s-]/g,''), password=String(b.password||'');
         const {rows}=await pool.query('select id,full_name,phone,password_hash from customers where phone=$1 and password_hash is not null limit 1',[phone]);
         const supplied=Buffer.from(passwordHash(password));
         if(!rows.length||supplied.length!==Buffer.from(rows[0].password_hash).length||!timingSafeEqual(supplied,Buffer.from(rows[0].password_hash))) return json(res,401,{error:'Невірний номер телефону або пароль.'});
