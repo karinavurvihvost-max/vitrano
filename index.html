@@ -133,7 +133,7 @@ async function loadHeroBanner(){try{const r=await fetch(API_BASE+'/api/storefron
 function updateWarehouseBadge(){[1,2].forEach(n=>{const b=document.querySelector('#warehousecard'+n);if(b)b.classList.toggle('active',selectedWarehouse===n)})}
 function chooseWarehouse(n){const next=Number(n);if(next!==1&&next!==2)return;const previous=selectedWarehouse;selectedWarehouse=next;saveStore('vitrano_selected_warehouse',selectedWarehouse);updateWarehouseBadge();if(previous!==selectedWarehouse){cart=[];saveDemoCart();}if(backendReady)renderProducts();renderCart();if(!backendReady)document.querySelector('#products').innerHTML='<div class="panel wide"><h3>Каталог готується до запуску</h3><p class="muted">Товари з’являться після додавання реальних товарів до вибраного складу.</p></div>'}
 
-document.body.appendChild(document.querySelector('#sectionmodal'));document.body.appendChild(document.querySelector('#cartmodal'));renderCategories();renderFilters();renderProducts();renderCart();renderAdmin();updateWarehouseBadge();loadHeroBanner();connectBackend();
+document.body.appendChild(document.querySelector('#sectionmodal'));document.body.appendChild(document.querySelector('#cartmodal'));connectBackend();for(const init of [renderCategories,renderFilters,renderProducts,renderCart,renderAdmin,updateWarehouseBadge,loadHeroBanner]){try{init()}catch(error){console.error('VITRANO startup error:',error)}}
 
 </script><script>let vitranoInstallPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();vitranoInstallPrompt=e;const b=document.querySelector('#installapp');if(b)b.hidden=false});
