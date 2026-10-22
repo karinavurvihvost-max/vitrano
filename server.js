@@ -102,7 +102,7 @@ async function handle(req, res) {
       const q = safeString(url.searchParams.get('q'), 80);
       const category = safeString(url.searchParams.get('category'), 80);
       const params = new URLSearchParams({
-        select: 'id,sku,name,slug,description,characteristics,category_id,image_urls,main_image_url,categories(name),supplier_offers(id,supplier_id,retail_price,availability,last_checked_at,suppliers(name))',
+        select: 'id,sku,name,slug,description,characteristics,category_id,image_urls,main_image_url,categories(name,slug),supplier_offers(id,supplier_id,retail_price,availability,last_checked_at,suppliers(name))',
         is_visible: 'eq.true',
         'supplier_offers.is_active': 'eq.true',
         order: 'name.asc',
