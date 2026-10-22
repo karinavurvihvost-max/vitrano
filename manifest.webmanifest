@@ -1,0 +1,14 @@
+{
+  "name": "VITRANO — Твій світ покупок",
+  "short_name": "VITRANO",
+  "description": "Український онлайн-магазин VITRANO",
+  "lang": "uk",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f8ff",
+  "theme_color": "#1769e0",
+  "icons": [
+    {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
