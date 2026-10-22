@@ -201,42 +201,13 @@ async function handle(req, res) {
         if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
         if (b.main_image_url!==undefined) await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[safeString(b.main_image_url,1000)||null,id]);
         if (b.offer_id && (b.retail_price!==undefined||b.purchase_cost!==undefined||b.availability!==undefined)) {
-          const fields=[],vals=[]; if(b.retail_price!==undefined){const n=Number(b.retail_price);if(!Number.isFinite(n)||n<0)return json(res,400,{error:'Некоректна ціна.'});vals.push(n);fields.push('retail_price=
-  } catch (error) {
-    const status=Number(error.status)||500;
-    if(status>=500) console.error('API error:',error.message);
-    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
-  }
-}
-http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
-+vals.length)}
-          if(b.purchase_cost!==undefined){const n=b.purchase_cost===null?null:Number(b.purchase_cost);if(n!==null&&(!Number.isFinite(n)||n<0))return json(res,400,{error:'Некоректна собівартість.'});vals.push(n);fields.push('purchase_cost=
-  } catch (error) {
-    const status=Number(error.status)||500;
-    if(status>=500) console.error('API error:',error.message);
-    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
-  }
-}
-http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
-+vals.length)}
-          if(b.availability!==undefined){if(!['available','check','unavailable'].includes(b.availability))return json(res,400,{error:'Некоректний статус наявності.'});vals.push(b.availability);fields.push('availability=
-  } catch (error) {
-    const status=Number(error.status)||500;
-    if(status>=500) console.error('API error:',error.message);
-    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
-  }
-}
-http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
-+vals.length)}
-          vals.push(b.offer_id); await pool.query('update supplier_offers set '+fields.join(',')+',updated_at=now() where id=
-  } catch (error) {
-    const status=Number(error.status)||500;
-    if(status>=500) console.error('API error:',error.message);
-    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
-  }
-}
-http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
-+vals.length,vals);
+          if (b.retail_price!==undefined && (!Number.isFinite(Number(b.retail_price)) || Number(b.retail_price)<0)) return json(res,400,{error:'Некоректна ціна.'});
+          if (b.purchase_cost!==undefined && b.purchase_cost!==null && (!Number.isFinite(Number(b.purchase_cost)) || Number(b.purchase_cost)<0)) return json(res,400,{error:'Некоректна собівартість.'});
+          if (b.availability!==undefined && !['available','check','unavailable'].includes(b.availability)) return json(res,400,{error:'Некоректний статус наявності.'});
+          await pool.query(
+            'update supplier_offers set retail_price=coalesce($1,retail_price), purchase_cost=coalesce($2,purchase_cost), availability=coalesce($3,availability), updated_at=now() where id=$4',
+            [b.retail_price===undefined?null:Number(b.retail_price),b.purchase_cost===undefined||b.purchase_cost===null?null:Number(b.purchase_cost),b.availability||null,b.offer_id]
+          );
         }
         await pool.query('insert into audit_log(action,entity_type,entity_id) values($1,$2,$3)',['product.update','product',id]);
         return json(res,200,{message:'Зміни збережено.'});
