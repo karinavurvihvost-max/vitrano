@@ -174,7 +174,8 @@ alter table public.audit_log enable row level security;
 create policy "Public can read visible categories" on public.categories for select to anon, authenticated using (is_visible = true);
 create policy "Public can read visible products" on public.products for select to anon, authenticated using (is_visible = true);
 create policy "Public can read active offers for visible products" on public.supplier_offers for select to anon, authenticated using (is_active = true and exists (select 1 from public.products p where p.id = product_id and p.is_visible = true));
-create policy "Public can read active suppliers" on public.suppliers for select to anon, authenticated using (is_active = true);
+-- Supplier contact details are private: no public SELECT policy on suppliers.
+-- Expose only explicitly approved public supplier fields through a reviewed view/API when needed.
 create policy "Public can read published reviews" on public.reviews for select to anon, authenticated using (status = 'published');
 create policy "Public can read active promotions" on public.promotions for select to anon, authenticated using (is_active = true and (starts_at is null or starts_at <= now()) and (ends_at is null or ends_at >= now()));
 
