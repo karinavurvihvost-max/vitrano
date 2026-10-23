@@ -324,6 +324,7 @@ async function handle(req, res) {
         const ids = [...merged.keys()];
         const { rows: offers } = await client.query(`
           select o.id,o.product_id,o.supplier_id,o.retail_price,o.purchase_cost,o.availability,
+            case when p.promo_price>0 and p.promo_price<o.retail_price and (p.promotion_start is null or p.promotion_start<=now()) and (p.promotion_end is null or p.promotion_end>=now()) then p.promo_price else o.retail_price end as effective_price,
             s.name as supplier_name,p.name as product_name,p.sku as product_sku
           from supplier_offers o join products p on p.id=o.product_id
           join suppliers s on s.id=o.supplier_id
@@ -336,15 +337,8 @@ async function handle(req, res) {
         if (new Set(offers.map(o=>o.supplier_id)).size!==1) {
           await client.query('ROLLBACK'); return json(res,400,{error:'Одне замовлення може містити товари лише одного постачальника. Розділіть кошик.'});
         }
-        const supplierName = String(offers[0].supplier_name || '').trim();
-        const minimumItems = supplierName === 'Склад 1' ? 3 : supplierName === 'Склад 2' ? 2 : 1;
-        const totalItems = ids.reduce((sum,id)=>sum+(merged.get(id)||0),0);
-        if (totalItems < minimumItems) {
-          await client.query('ROLLBACK');
-          return json(res,400,{error:'Мінімальне замовлення для «'+supplierName+'» — '+minimumItems+' товари. Зараз у кошику: '+totalItems+'. Додайте ще '+(minimumItems-totalItems)+'.'});
-        }
         const byId = new Map(offers.map(o=>[o.id,o]));
-        const subtotal = ids.reduce((sum,id)=>sum+Number(byId.get(id).retail_price)*merged.get(id),0);
+        const subtotal = ids.reduce((sum,id)=>sum+Number(byId.get(id).effective_price)*merged.get(id),0);
         if (!Number.isFinite(subtotal)||subtotal<=0) { await client.query('ROLLBACK'); return json(res,400,{error:'Некоректна сума замовлення.'}); }
         const { rows: customerRows } = await client.query(`
           insert into customers(full_name,phone) values($1,$2)
@@ -360,7 +354,7 @@ async function handle(req, res) {
           const o=byId.get(id);
           await client.query(`insert into order_items(order_id,product_id,offer_id,product_name_snapshot,sku_snapshot,supplier_cost_snapshot,unit_price,quantity)
             values($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [order.id,o.product_id,o.id,o.product_name,o.product_sku,o.purchase_cost,o.retail_price,merged.get(id)]);
+            [order.id,o.product_id,o.id,o.product_name,o.product_sku,o.purchase_cost,o.effective_price,merged.get(id)]);
         }
         await client.query('COMMIT');
         return json(res,201,{order:{id:order.id,order_number:order.order_number,status:order.status,subtotal:order.subtotal,created_at:order.created_at},message:'Замовлення прийнято. Очікуйте підтвердження наявності.'});
