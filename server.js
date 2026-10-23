@@ -98,7 +98,7 @@ async function fetchSigaCatalog() {
   for (let page=1; page<=Math.min(totalPages,20); page++) {
     try {
       const response = await fetch('https://siga-ua.net/wp-json/wc/store/v1/products?per_page=100&page='+page, {
-        headers:{'accept':'application/json','user-agent':'VITRANO catalog importer/1.0'},
+        headers:{'accept':'application/json','user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36','accept-language':'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7','referer':'https://siga-ua.net/shop/'},
         signal:AbortSignal.timeout(12000)
       });
       if (!response.ok) { if(page===1) apiWorked=false; break; }
@@ -127,7 +127,7 @@ async function fetchSigaCatalog() {
   const items = [];
   for (let page=1; page<=20; page++) {
     const path = page===1 ? 'https://siga-ua.net/shop/' : 'https://siga-ua.net/shop/page/'+page+'/';
-    const response = await fetch(path,{headers:{'user-agent':'VITRANO catalog importer/1.0'},signal:AbortSignal.timeout(12000)});
+    const response = await fetch(path,{headers:{'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36','accept-language':'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7','referer':'https://siga-ua.net/shop/'},signal:AbortSignal.timeout(12000)});
     if (!response.ok) { if(page===1) throw new Error('Siga UA не віддає каталог (HTTP '+response.status+').'); break; }
     const html = await response.text();
     const found = parseSigaHtmlPage(html);
