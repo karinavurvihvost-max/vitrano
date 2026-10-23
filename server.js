@@ -47,6 +47,143 @@ const safeString = (v, max = 160) => clean(v).slice(0, max);
 const validPhone = v => /^[+\d()\s-]{9,20}$/.test(v);
 const requireDb = () => { if (!pool) { const e = new Error('Database not configured'); e.status = 503; throw e; } };
 const hashToken = token => createHash('sha256').update(token).digest('hex');
+
+function htmlText(value='') {
+  return String(value).replace(/<script\b[\s\S]*?<\/script>/gi,' ').replace(/<style\b[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ')
+    .replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#039;|&apos;/gi,"'")
+    .replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)))
+    .replace(/\s+/g,' ').trim();
+}
+function sigaSlug(value='') {
+  return String(value).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,100) || 'product';
+}
+function attrValue(tag, attr) {
+  const m = String(tag).match(new RegExp('\\b'+attr+'\\s*=\\s*"([^"]*)"','i'));
+  return m ? m[1].replace(/&amp;/g,'&') : '';
+}
+function parseSigaHtmlPage(html) {
+  const cards = [...String(html).matchAll(/<li\b(?=[^>]*class=["'][^"']*\bproduct\b[^"']*["'])[^>]*>[\s\S]*?<\/li>/gi)].map(m=>m[0]);
+  const out = [];
+  for (const card of cards) {
+    const titleMatch = card.match(/<(?:h2|h3)[^>]*class=["'][^"']*woocommerce-loop-product__title[^"']*["'][^>]*>([\s\S]*?)<\/(?:h2|h3)>/i);
+    const name = htmlText(titleMatch?.[1] || '');
+    const linkTag = card.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/i);
+    let permalink = (linkTag?.[1] || '').replace(/&amp;/g,'&');
+    try { permalink = new URL(permalink, 'https://siga-ua.net').href; } catch { continue; }
+    if (!name || !permalink.startsWith('https://siga-ua.net/')) continue;
+    const priceBlock = card.match(/<(?:span|p)[^>]*class=["'][^"']*(?:price|woocommerce-Price-amount)[^"']*["'][^>]*>([\s\S]*?)<\/(?:span|p)>/i);
+    const priceText = htmlText(priceBlock?.[1] || card.match(/<bdi[^>]*>([\s\S]*?)<\/bdi>/i)?.[1] || '');
+    const priceMatch = priceText.match(/[\d][\d\s.,]*/);
+    if (!priceMatch) continue;
+    const price = Number(priceMatch[0].replace(/\s/g,'').replace(/,/g,''));
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const imgTag = card.match(/<img\b[^>]*>/i)?.[0] || '';
+    let image = attrValue(imgTag,'data-src') || attrValue(imgTag,'data-lazy-src') || attrValue(imgTag,'src');
+    try { image = image ? new URL(image,'https://siga-ua.net').href : ''; } catch { image=''; }
+    const categoryMatch = card.match(/<(?:span|div)[^>]*class=["'][^"']*(?:ast-woo-product-category|product-category)[^"']*["'][^>]*>([\s\S]*?)<\/(?:span|div)>/i);
+    let category = htmlText(categoryMatch?.[1] || '');
+    if (!category) {
+      const cls = card.match(/\bproduct_cat-([a-z0-9-]+)/i)?.[1] || '';
+      const map = {'king-size':'King size','demi':'Demi','nano':'Nano','super-slims':'Super slims','bez-filtra':'Без фільтра','sticks-iqos':'Стіки для IQOS','elektronni-sigareti':'Електронні сигарети','duty-free':'Duty Free','aktsiz-ukraina':'Акциз Україна'};
+      category = map[cls] || 'Інше';
+    }
+    out.push({name,permalink,price,image,category,sourceInStock:!(/outofstock/i.test(card)||/очікується/i.test(htmlText(card)))});
+  }
+  return out;
+}
+async function fetchSigaCatalog() {
+  const apiItems = [];
+  let apiWorked = false, totalPages = 20;
+  for (let page=1; page<=Math.min(totalPages,20); page++) {
+    try {
+      const response = await fetch('https://siga-ua.net/wp-json/wc/store/v1/products?per_page=100&page='+page, {
+        headers:{'accept':'application/json','user-agent':'VITRANO catalog importer/1.0'},
+        signal:AbortSignal.timeout(12000)
+      });
+      if (!response.ok) { if(page===1) apiWorked=false; break; }
+      const payload = await response.json();
+      if (!Array.isArray(payload)) { if(page===1) apiWorked=false; break; }
+      apiWorked = true;
+      const headerPages = Number(response.headers.get('X-WP-TotalPages'));
+      if (Number.isFinite(headerPages) && headerPages>0) totalPages=Math.min(headerPages,20);
+      for (const p of payload) {
+        const permalink = typeof p.permalink==='string' ? p.permalink : '';
+        const rawPrice = Number(p.prices?.price);
+        const minor = Number.isFinite(Number(p.prices?.currency_minor_unit)) ? Number(p.prices.currency_minor_unit) : 2;
+        const price = rawPrice / Math.pow(10,minor);
+        if (!p.name || !permalink.startsWith('https://siga-ua.net/') || !Number.isFinite(price) || price<=0) continue;
+        apiItems.push({
+          name:htmlText(p.name),permalink,price,
+          image:Array.isArray(p.images) && p.images[0]?.src ? String(p.images[0].src) : '',
+          category:Array.isArray(p.categories) && p.categories[0]?.name ? htmlText(p.categories[0].name) : 'Інше',
+          sourceInStock:p.is_in_stock===true
+        });
+      }
+      if (!payload.length || (Number.isFinite(headerPages) && page>=headerPages)) break;
+    } catch (e) { if(page===1) apiWorked=false; break; }
+  }
+  if (apiWorked && apiItems.length) return {items:apiItems,source:'WooCommerce Store API'};
+  const items = [];
+  for (let page=1; page<=20; page++) {
+    const path = page===1 ? 'https://siga-ua.net/shop/' : 'https://siga-ua.net/shop/page/'+page+'/';
+    const response = await fetch(path,{headers:{'user-agent':'VITRANO catalog importer/1.0'},signal:AbortSignal.timeout(12000)});
+    if (!response.ok) { if(page===1) throw new Error('Siga UA не віддає каталог (HTTP '+response.status+').'); break; }
+    const html = await response.text();
+    const found = parseSigaHtmlPage(html);
+    if (!found.length) break;
+    items.push(...found);
+    if (!/woocommerce-pagination|page-numbers|Показано\s+\d+/i.test(html)) break;
+  }
+  const unique = [...new Map(items.map(p=>[p.permalink,p])).values()];
+  if (!unique.length) throw new Error('Не вдалося розібрати товари Siga UA. Імпорт не виконувався.');
+  return {items:unique,source:'HTML catalog'};
+}
+async function importSigaCatalog() {
+  requireDb();
+  const {items,source} = await fetchSigaCatalog();
+  if (!items.length) throw new Error('Каталог Siga UA порожній; базу не змінено.');
+  const client=await pool.connect();
+  let created=0, updated=0;
+  try {
+    await client.query('BEGIN');
+    let supplier=(await client.query("select id from suppliers where name='Siga UA — імпорт' order by created_at limit 1")).rows[0];
+    if(!supplier) supplier=(await client.query("insert into suppliers(name,contact_name,notes,is_active) values('Siga UA — імпорт','Імпорт каталогу','Імпортовані дані; перед публікацією перевірити право використання фото, ліцензійні та вікові вимоги.',true) returning id")).rows[0];
+    for (const item of items) {
+      const permalink = item.permalink;
+      const sourceKey = createHash('sha256').update(permalink).digest('hex').slice(0,12);
+      const sku = 'SIGA-'+sourceKey.toUpperCase();
+      const slug = 'siga-'+sigaSlug(item.name).slice(0,90)+'-'+sourceKey;
+      const categoryName = 'Siga UA — '+safeString(item.category || 'Інше',80);
+      const categorySlug = 'siga-'+sigaSlug(item.category || 'other').slice(0,60);
+      const cat = await client.query('insert into categories(name,slug,is_visible) values($1,$2,false) on conflict(name) do update set name=excluded.name returning id',[categoryName,categorySlug]);
+      const image = typeof item.image==='string' && item.image.startsWith('https://') ? item.image.slice(0,1000) : '';
+      const meta = JSON.stringify({siga_source_url:permalink,siga_source:'siga-ua.net',siga_source_category:item.category||'Інше',siga_source_in_stock:Boolean(item.sourceInStock),siga_imported_at:new Date().toISOString(),siga_needs_review:true});
+      const existing = (await client.query("select id from products where characteristics->>'siga_source_url'=$1 or sku=$2 limit 1",[permalink,sku])).rows[0];
+      let productId;
+      if(existing) {
+        productId=existing.id;
+        await client.query("update products set sku=$2,name=$3,slug=$4,description=$5,category_id=$6,image_urls=$7,main_image_url=$8,is_visible=false,characteristics=coalesce(characteristics,'{}'::jsonb)||$9::jsonb,updated_at=now() where id=$1",
+          [productId,sku,safeString(item.name,180),slug,'Імпортовано з Siga UA. Перевірити актуальність ціни, наявність, документи та право використання зображення перед публікацією.',cat.rows[0].id,image?[image]:[],image||null,meta]);
+        updated++;
+      } else {
+        const p=await client.query('insert into products(sku,name,slug,description,characteristics,category_id,image_urls,main_image_url,is_visible) values($1,$2,$3,$4,$5::jsonb,$6,$7,$8,false) returning id',
+          [sku,safeString(item.name,180),slug,'Імпортовано з Siga UA. Перевірити актуальність ціни, наявність, документи та право використання зображення перед публікацією.',meta,cat.rows[0].id,image?[image]:[],image||null]);
+        productId=p.rows[0].id; created++;
+      }
+      await client.query("insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,null,$3,'check',true) on conflict(product_id,supplier_id) do update set retail_price=excluded.retail_price,purchase_cost=null,availability='check',is_active=true,updated_at=now()",
+        [productId,supplier.id,Number(item.price.toFixed(2))]);
+    }
+    await client.query('insert into audit_log(action,entity_type,details) values($1,$2,$3)',
+      ['catalog.import','product',JSON.stringify({source:'siga-ua.net',source_method:source,found:items.length,created,updated,hidden:true})]);
+    await client.query('COMMIT');
+    return {ok:true,source,found:items.length,created,updated,hidden:true,message:'Імпорт завершено. Товари залишені прихованими до перевірки наявності, ліцензійних вимог і прав на зображення.'};
+  } catch(e) {
+    await client.query('ROLLBACK').catch(()=>{});
+    throw e;
+  } finally { client.release(); }
+}
+
 const passwordHash = password => scryptSync(password, 'vitrano-customer-v1', 64).toString('hex');
 async function ensureCustomerAuthSchema() {
   await pool.query('alter table customers add column if not exists password_hash text');
@@ -253,6 +390,11 @@ async function handle(req, res) {
         await pool.query("insert into audit_log(action,entity_type,details) values($1,$2,$3)",['storefront.banner.update','storefront_settings',JSON.stringify({count:banners.length,titles:banners.map(x=>x.title)})]);
         return json(res,200,{message:'Усі 5 банерів збережено.',hero_banner:banners[0],hero_banners:banners});
       }
+
+      if (req.method === 'POST' && url.pathname === '/api/admin/import-siga') {
+        const result = await importSigaCatalog();
+        return json(res,200,result);
+      }
       if (req.method === 'GET' && url.pathname === '/api/admin/overview') {
         const [p,o,s,fin] = await Promise.all([
           pool.query('select count(*)::int as count from products'),
@@ -320,7 +462,7 @@ async function handle(req, res) {
       const productMatch=url.pathname.match(/^\/api\/admin\/products\/([0-9a-f-]{36})$/i);
       if (req.method === 'PATCH' && productMatch) {
         const b=await readBody(req), id=productMatch[1];
-        if (b.is_visible!==undefined) await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]);
+        if (b.is_visible!==undefined) { await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]); if(Boolean(b.is_visible)) await pool.query('update categories set is_visible=true where id=(select category_id from products where id=$1)',[id]); }
         if (b.name!==undefined) await pool.query('update products set name=$1,updated_at=now() where id=$2',[safeString(b.name,180),id]);
         if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
         if (b.main_image_url!==undefined) { const img=typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000); if(typeof img==='string'&&img.startsWith('data:image/')&&img.length>1500000)return json(res,400,{error:'Фото завелике. Виберіть менше фото.'}); await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[img||null,id]); }
@@ -368,4 +510,4 @@ async function handle(req, res) {
     return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
   }
 }
-http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>{ console.log(`VITRANO API listening on ${PORT}`); if(process.env.SIGA_IMPORT_ON_START==='true'){ importSigaCatalog().then(result=>console.log('SIGA_IMPORT_RESULT '+JSON.stringify(result))).catch(error=>console.error('SIGA_IMPORT_FAILED '+error.message)); } });
