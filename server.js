@@ -305,8 +305,12 @@ async function handle(req, res) {
             let sup=await client.query('select id from suppliers where name=$1 order by created_at limit 1',[warehouse]);
             if(!sup.rows.length) sup=await client.query('insert into suppliers(name) values($1) returning id',[warehouse]);
             const price=warehouse==='Склад 1'?price1:price2, offerCost=warehouse==='Склад 1'?(cost1===null?cost:cost1):(cost2===null?cost:cost2);
-            await client.query('insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true)',
+            const offer=await client.query('insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true) returning id',
               [p.rows[0].id,sup.rows[0].id,offerCost,price,['available','check','unavailable'].includes(b.availability)?b.availability:'check']);
+            if (b.markup_type && ['amount','percent'].includes(b.markup_type) && Number.isFinite(Number(b.markup_value)) && Number(b.markup_value)>=0) {
+              await client.query("update products set characteristics=coalesce(characteristics,'{}'::jsonb)||jsonb_build_object('vitrano_markup',coalesce(characteristics->'vitrano_markup','{}'::jsonb)||jsonb_build_object($1::text,jsonb_build_object('type',$2::text,'value',$3::numeric))) where id=$4",
+                [offer.rows[0].id,b.markup_type,Number(b.markup_value),p.rows[0].id]);
+            }
           }
           await client.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)', ['product.create','product',p.rows[0].id,JSON.stringify({name})]);
           await client.query('COMMIT');
@@ -324,10 +328,16 @@ async function handle(req, res) {
           if (b.retail_price!==undefined && (!Number.isFinite(Number(b.retail_price)) || Number(b.retail_price)<0)) return json(res,400,{error:'Некоректна ціна.'});
           if (b.purchase_cost!==undefined && b.purchase_cost!==null && (!Number.isFinite(Number(b.purchase_cost)) || Number(b.purchase_cost)<0)) return json(res,400,{error:'Некоректна собівартість.'});
           if (b.availability!==undefined && !['available','check','unavailable'].includes(b.availability)) return json(res,400,{error:'Некоректний статус наявності.'});
+          if (b.markup_type!==undefined && !['amount','percent'].includes(b.markup_type)) return json(res,400,{error:'Некоректний тип націнки.'});
+          if (b.markup_value!==undefined && (!Number.isFinite(Number(b.markup_value)) || Number(b.markup_value)<0)) return json(res,400,{error:'Некоректне значення націнки.'});
           await pool.query(
             'update supplier_offers set retail_price=coalesce($1,retail_price), purchase_cost=coalesce($2,purchase_cost), availability=coalesce($3,availability), updated_at=now() where id=$4',
             [b.retail_price===undefined?null:Number(b.retail_price),b.purchase_cost===undefined||b.purchase_cost===null?null:Number(b.purchase_cost),b.availability||null,b.offer_id]
           );
+          if (b.markup_type!==undefined && b.markup_value!==undefined) {
+            await pool.query("update products set characteristics=coalesce(characteristics,'{}'::jsonb)||jsonb_build_object('vitrano_markup',coalesce(characteristics->'vitrano_markup','{}'::jsonb)||jsonb_build_object($1::text,jsonb_build_object('type',$2::text,'value',$3::numeric))),updated_at=now() where id=$4",
+              [b.offer_id,b.markup_type,Number(b.markup_value),id]);
+          }
         }
         await pool.query('insert into audit_log(action,entity_type,entity_id) values($1,$2,$3)',['product.update','product',id]);
         return json(res,200,{message:'Зміни збережено.'});
