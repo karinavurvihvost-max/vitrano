@@ -485,6 +485,30 @@ async function handle(req, res) {
               [b.offer_id,b.markup_type,Number(b.markup_value),id]);
           }
         }
+        if (b.warehouse_names !== undefined) {
+          const wanted = [...new Set(Array.isArray(b.warehouse_names) ? b.warehouse_names : [])];
+          if (!wanted.length || wanted.some(n => !['Склад 1','Склад 2'].includes(n))) return json(res,400,{error:'Оберіть щонайменше один склад.'});
+          const current = await pool.query(`select o.id,o.supplier_id,o.retail_price,o.purchase_cost,o.availability,o.is_active,s.name as supplier_name
+            from supplier_offers o join suppliers s on s.id=o.supplier_id where o.product_id=$1`,[id]);
+          const template = current.rows.find(o=>o.is_active) || current.rows[0];
+          if (!template) return json(res,400,{error:'Немає ціни для створення пропозиції на новому складі. Спочатку задайте ціну товару.'});
+          for (const warehouse of wanted) {
+            let supplier = await pool.query('select id from suppliers where name=$1 limit 1',[warehouse]);
+            if (!supplier.rowCount) supplier = await pool.query('insert into suppliers(name,is_active) values($1,true) returning id',[warehouse]);
+            const exists = current.rows.find(o=>o.supplier_name===warehouse);
+            if (exists) {
+              await pool.query('update supplier_offers set is_active=true,updated_at=now() where id=$1',[exists.id]);
+            } else {
+              await pool.query(`insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active)
+                values($1,$2,$3,$4,$5,true)`,[id,supplier.rows[0].id,template.purchase_cost,template.retail_price,template.availability||'check']);
+            }
+          }
+          for (const offer of current.rows) {
+            if (['Склад 1','Склад 2'].includes(offer.supplier_name) && !wanted.includes(offer.supplier_name)) {
+              await pool.query('update supplier_offers set is_active=false,updated_at=now() where id=$1',[offer.id]);
+            }
+          }
+        }
         await pool.query('insert into audit_log(action,entity_type,entity_id) values($1,$2,$3)',['product.update','product',id]);
         return json(res,200,{message:'Зміни збережено.'});
       }
