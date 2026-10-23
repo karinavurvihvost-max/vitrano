@@ -59,7 +59,7 @@ function sigaSlug(value='') {
     .replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,100) || 'product';
 }
 function attrValue(tag, attr) {
-  const m = String(tag).match(new RegExp('(?:^|\\\\s)'+attr+'\\\\s*=\\\\s*["\\\\']([^"\\\\']*)["\\\\']','i'));
+  const m = String(tag).match(new RegExp('\\\\b'+attr+'\\\\s*=\\\\s*"([^"]*)"','i'));
   return m ? m[1].replace(/&amp;/g,'&') : '';
 }
 function parseSigaHtmlPage(html) {
