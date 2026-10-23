@@ -103,7 +103,7 @@ async function handle(req, res) {
         from products p left join categories c on c.id=p.category_id
         left join supplier_offers o on o.product_id=p.id and o.is_active=true
         left join suppliers s on s.id=o.supplier_id and s.is_active=true
-        left join (select product_id,avg(rating)::numeric(2,1) as average_rating,count(*)::int as review_count from reviews where status='approved' group by product_id) rv on rv.product_id=p.id
+        left join (select product_id,avg(rating)::numeric(2,1) as average_rating,count(*)::int as review_count from reviews where status='published' group by product_id) rv on rv.product_id=p.id
         where ${filters.join(' and ')}
         group by p.id,c.id,rv.average_rating,rv.review_count order by p.name asc limit 100`, params);
       return json(res, 200, { products: rows.filter(p => p.offers.length > 0) });
@@ -111,7 +111,7 @@ async function handle(req, res) {
     const publicReviewMatch=url.pathname.match(/^\/api\/products\/([0-9a-f-]{36})\/reviews$/i);
     if(publicReviewMatch&&req.method==='GET'){
       requireDb();
-      const {rows}=await pool.query("select r.id,r.rating,r.body,r.admin_reply,r.created_at,coalesce(c.full_name,'Покупець') as customer_name from reviews r left join customers c on c.id=r.customer_id where r.product_id=$1 and r.status='approved' order by r.created_at desc limit 50",[publicReviewMatch[1]]);
+      const {rows}=await pool.query("select r.id,r.rating,r.body,r.admin_reply,r.created_at,coalesce(c.full_name,'Покупець') as customer_name from reviews r left join customers c on c.id=r.customer_id where r.product_id=$1 and r.status='published' order by r.created_at desc limit 50",[publicReviewMatch[1]]);
       return json(res,200,{reviews:rows});
     }
     if(publicReviewMatch&&req.method==='POST'){
@@ -269,7 +269,7 @@ async function handle(req, res) {
       const reviewAdminMatch=url.pathname.match(/^\/api\/admin\/reviews\/([0-9a-f-]{36})$/i);
       if(req.method==='PATCH'&&reviewAdminMatch){
         const b=await readBody(req),status=safeString(b.status,20),reply=safeString(b.admin_reply,1200);
-        if(!['pending','approved','rejected'].includes(status))return json(res,400,{error:'Некоректний статус відгуку.'});
+        if(!['pending','published','rejected'].includes(status))return json(res,400,{error:'Некоректний статус відгуку.'});
         await pool.query('update reviews set status=$1,admin_reply=$2 where id=$3',[status,reply||null,reviewAdminMatch[1]]);
         await pool.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)',['review.moderate','review',reviewAdminMatch[1],JSON.stringify({status})]);
         return json(res,200,{message:'Відгук оновлено.'});
