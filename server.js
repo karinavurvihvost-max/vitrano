@@ -337,6 +337,13 @@ async function handle(req, res) {
         if (new Set(offers.map(o=>o.supplier_id)).size!==1) {
           await client.query('ROLLBACK'); return json(res,400,{error:'Одне замовлення може містити товари лише одного постачальника. Розділіть кошик.'});
         }
+        const supplierName = String(offers[0].supplier_name || '').trim();
+        const minimumItems = supplierName === 'Склад 1' ? 3 : supplierName === 'Склад 2' ? 2 : 1;
+        const totalItems = ids.reduce((sum,id)=>sum+(merged.get(id)||0),0);
+        if (totalItems < minimumItems) {
+          await client.query('ROLLBACK');
+          return json(res,400,{error:'Мінімальне замовлення для «'+supplierName+'» — '+minimumItems+' товари. Зараз у кошику: '+totalItems+'. Додайте ще '+(minimumItems-totalItems)+'.'});
+        }
         const byId = new Map(offers.map(o=>[o.id,o]));
         const subtotal = ids.reduce((sum,id)=>sum+Number(byId.get(id).effective_price)*merged.get(id),0);
         if (!Number.isFinite(subtotal)||subtotal<=0) { await client.query('ROLLBACK'); return json(res,400,{error:'Некоректна сума замовлення.'}); }
