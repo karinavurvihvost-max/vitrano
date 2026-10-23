@@ -187,7 +187,7 @@ async function handle(req, res) {
         const ids = [...merged.keys()];
         const { rows: offers } = await client.query(`
           select o.id,o.product_id,o.supplier_id,o.retail_price,o.purchase_cost,o.availability,
-            p.name as product_name,p.sku as product_sku
+            s.name as supplier_name,p.name as product_name,p.sku as product_sku
           from supplier_offers o join products p on p.id=o.product_id
           join suppliers s on s.id=o.supplier_id
           where o.id=any($1::uuid[]) and o.is_active=true and p.is_visible=true and s.is_active=true
@@ -198,6 +198,13 @@ async function handle(req, res) {
         }
         if (new Set(offers.map(o=>o.supplier_id)).size!==1) {
           await client.query('ROLLBACK'); return json(res,400,{error:'Одне замовлення може містити товари лише одного постачальника. Розділіть кошик.'});
+        }
+        const supplierName = String(offers[0].supplier_name || '').trim();
+        const minimumItems = supplierName === 'Склад 1' ? 3 : supplierName === 'Склад 2' ? 2 : 1;
+        const totalItems = ids.reduce((sum,id)=>sum+(merged.get(id)||0),0);
+        if (totalItems < minimumItems) {
+          await client.query('ROLLBACK');
+          return json(res,400,{error:'Мінімальне замовлення для «'+supplierName+'» — '+minimumItems+' товари. Зараз у кошику: '+totalItems+'. Додайте ще '+(minimumItems-totalItems)+'.'});
         }
         const byId = new Map(offers.map(o=>[o.id,o]));
         const subtotal = ids.reduce((sum,id)=>sum+Number(byId.get(id).retail_price)*merged.get(id),0);
