@@ -462,7 +462,7 @@ async function handle(req, res) {
       const productMatch=url.pathname.match(/^\/api\/admin\/products\/([0-9a-f-]{36})$/i);
       if (req.method === 'PATCH' && productMatch) {
         const b=await readBody(req), id=productMatch[1];
-        if (b.is_visible!==undefined) await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]);
+        if (b.is_visible!==undefined) { await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]); if(Boolean(b.is_visible)) await pool.query('update categories set is_visible=true where id=(select category_id from products where id=$1)',[id]); }
         if (b.name!==undefined) await pool.query('update products set name=$1,updated_at=now() where id=$2',[safeString(b.name,180),id]);
         if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
         if (b.main_image_url!==undefined) { const img=typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000); if(typeof img==='string'&&img.startsWith('data:image/')&&img.length>1500000)return json(res,400,{error:'Фото завелике. Виберіть менше фото.'}); await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[img||null,id]); }
@@ -510,4 +510,4 @@ async function handle(req, res) {
     return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
   }
 }
-http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>console.log(`VITRANO API listening on ${PORT}`));
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>{ console.log(`VITRANO API listening on ${PORT}`); if(process.env.SIGA_IMPORT_ON_START==='true'){ importSigaCatalog().then(result=>console.log('SIGA_IMPORT_RESULT '+JSON.stringify(result))).catch(error=>console.error('SIGA_IMPORT_FAILED '+error.message)); } });
