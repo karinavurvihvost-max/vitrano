@@ -59,7 +59,7 @@ function sigaSlug(value='') {
     .replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,100) || 'product';
 }
 function attrValue(tag, attr) {
-  const m = String(tag).match(new RegExp('\\\\b'+attr+'\\\\s*=\\\\s*"([^"]*)"','i'));
+  const m = String(tag).match(new RegExp('\\b'+attr+'\\s*=\\s*"([^"]*)"','i'));
   return m ? m[1].replace(/&amp;/g,'&') : '';
 }
 function parseSigaHtmlPage(html) {
@@ -163,7 +163,7 @@ async function importSigaCatalog() {
       let productId;
       if(existing) {
         productId=existing.id;
-        await client.query('update products set sku=$2,name=$3,slug=$4,description=$5,category_id=$6,image_urls=$7,main_image_url=$8,is_visible=false,characteristics=coalesce(characteristics,'+'\\'{}\\''+'::jsonb)||$9::jsonb,updated_at=now() where id=$1',
+        await client.query("update products set sku=$2,name=$3,slug=$4,description=$5,category_id=$6,image_urls=$7,main_image_url=$8,is_visible=false,characteristics=coalesce(characteristics,'{}'::jsonb)||$9::jsonb,updated_at=now() where id=$1",
           [productId,sku,safeString(item.name,180),slug,'Імпортовано з Siga UA. Перевірити актуальність ціни, наявність, документи та право використання зображення перед публікацією.',cat.rows[0].id,image?[image]:[],image||null,meta]);
         updated++;
       } else {
