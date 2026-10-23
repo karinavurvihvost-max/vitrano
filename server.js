@@ -21,7 +21,7 @@ const json = (res, status, body) => {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'access-control-allow-origin': ALLOWED_ORIGIN,
-    'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'access-control-allow-headers': 'content-type,authorization',
     'vary': 'Origin'
   });
@@ -204,7 +204,7 @@ async function handle(req, res) {
   const origin = req.headers.origin;
   if (origin && origin !== ALLOWED_ORIGIN) return json(res, 403, { error: 'Origin is not allowed' });
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, { 'access-control-allow-origin': ALLOWED_ORIGIN, 'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS', 'access-control-allow-headers': 'content-type,authorization', 'access-control-max-age': '600', vary: 'Origin' });
+    res.writeHead(204, { 'access-control-allow-origin': ALLOWED_ORIGIN, 'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'content-type,authorization', 'access-control-max-age': '600', vary: 'Origin' });
     return res.end();
   }
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
@@ -464,19 +464,22 @@ async function handle(req, res) {
         const b=await readBody(req), id=productMatch[1];
         if (b.is_visible!==undefined) { await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]); if(Boolean(b.is_visible)) await pool.query('update categories set is_visible=true where id=(select category_id from products where id=$1)',[id]); }
         if (b.name!==undefined) await pool.query('update products set name=$1,updated_at=now() where id=$2',[safeString(b.name,180),id]);
+        if (b.sku!==undefined) await pool.query('update products set sku=$1,updated_at=now() where id=$2',[safeString(b.sku,80)||null,id]);
         if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
         if (b.category!==undefined) { const category=safeString(b.category,100)||'Інше'; const slug=category.toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'other'; const cat=await pool.query('insert into categories(name,slug) values($1,$2) on conflict(name) do update set name=excluded.name returning id',[category,slug]); await pool.query('update products set category_id=$1,updated_at=now() where id=$2',[cat.rows[0].id,id]); }
         if (b.main_image_url!==undefined) { const img=typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000); if(typeof img==='string'&&img.startsWith('data:image/')&&img.length>1500000)return json(res,400,{error:'Фото завелике. Виберіть менше фото.'}); await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[img||null,id]); }
+        if (b.image_urls!==undefined) { if(!Array.isArray(b.image_urls)||b.image_urls.length>8||b.image_urls.some(x=>typeof x!=='string'||(!/^https:\/\//i.test(x)&&!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(x))||x.length>1500000)) return json(res,400,{error:'Фото: додайте до 8 коректних HTTPS-посилань або зображень у підтримуваному форматі.'}); await pool.query('update products set image_urls=$1,updated_at=now() where id=$2',[b.image_urls,id]); }
         if (b.offer_id && (b.retail_price!==undefined||b.purchase_cost!==undefined||b.availability!==undefined)) {
           if (b.retail_price!==undefined && (!Number.isFinite(Number(b.retail_price)) || Number(b.retail_price)<0)) return json(res,400,{error:'Некоректна ціна.'});
           if (b.purchase_cost!==undefined && b.purchase_cost!==null && (!Number.isFinite(Number(b.purchase_cost)) || Number(b.purchase_cost)<0)) return json(res,400,{error:'Некоректна собівартість.'});
           if (b.availability!==undefined && !['available','check','unavailable'].includes(b.availability)) return json(res,400,{error:'Некоректний статус наявності.'});
           if (b.markup_type!==undefined && !['amount','percent'].includes(b.markup_type)) return json(res,400,{error:'Некоректний тип націнки.'});
           if (b.markup_value!==undefined && (!Number.isFinite(Number(b.markup_value)) || Number(b.markup_value)<0)) return json(res,400,{error:'Некоректне значення націнки.'});
-          await pool.query(
-            'update supplier_offers set retail_price=coalesce($1,retail_price), purchase_cost=coalesce($2,purchase_cost), availability=coalesce($3,availability), updated_at=now() where id=$4',
-            [b.retail_price===undefined?null:Number(b.retail_price),b.purchase_cost===undefined||b.purchase_cost===null?null:Number(b.purchase_cost),b.availability||null,b.offer_id]
+          const offerUpdate=await pool.query(
+            'update supplier_offers set retail_price=coalesce($1,retail_price), purchase_cost=case when $2::boolean then $3::numeric else purchase_cost end, availability=coalesce($4,availability), updated_at=now() where id=$5 and product_id=$6',
+            [b.retail_price===undefined?null:Number(b.retail_price),b.purchase_cost!==undefined,b.purchase_cost===undefined||b.purchase_cost===null?null:Number(b.purchase_cost),b.availability||null,b.offer_id,id]
           );
+          if(!offerUpdate.rowCount)return json(res,404,{error:'Пропозицію цього постачальника не знайдено для товару.'});
           if (b.markup_type!==undefined && b.markup_value!==undefined) {
             await pool.query("update products set characteristics=coalesce(characteristics,'{}'::jsonb)||jsonb_build_object('vitrano_markup',coalesce(characteristics->'vitrano_markup','{}'::jsonb)||jsonb_build_object($1::text,jsonb_build_object('type',$2::text,'value',$3::numeric))),updated_at=now() where id=$4",
               [b.offer_id,b.markup_type,Number(b.markup_value),id]);
