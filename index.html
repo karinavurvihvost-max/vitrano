@@ -137,28 +137,31 @@ body{min-width:0;min-height:100%;-webkit-text-size-adjust:100%;text-size-adjust:
 .top-product-price{font-size:clamp(12px,1.3vw,16px);line-height:1.15;font-weight:950;color:#f20b4b;white-space:nowrap}
 .top-product-cart{width:29px;height:29px;flex:0 0 29px;border:0;border-radius:12px;background:#f20b4b;color:#fff;font-size:20px;box-shadow:0 5px 12px #f20b4b25}
 @media(max-width:620px){
-.top-products-section{margin-top:14px}
-.top-products-head{margin-bottom:8px}
-.top-products-head h2{font-size:18px}
-.top-products-all{font-size:12px}
-.top-products-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.top-product-card{border-radius:14px!important}
-.top-product-image{height:88px;padding:5px}
-.top-product-info{padding:6px 7px 7px}
-.top-product-info h3{font-size:11px;line-height:1.25}
-.top-product-subtitle{font-size:10px;min-height:0}
-.top-product-bottom{margin-top:5px}
-.top-product-price{font-size:13px}
-.top-product-cart{width:26px;height:26px;flex-basis:26px;border-radius:8px;font-size:15px}
-.top-product-heart{width:23px;height:23px;right:5px;top:5px;font-size:17px}
+.top-products-section{margin-top:10px}
+.top-products-head{margin-bottom:6px}
+.top-products-head h2{font-size:16px}
+.top-products-all{font-size:11px;padding:4px 0}
+.top-products-all span{font-size:14px}
+.top-products-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.top-product-card{border-radius:11px!important}
+.top-product-image{height:56px;padding:4px}
+.top-product-info{padding:5px}
+.top-product-info h3{font-size:10px;line-height:1.2;margin-bottom:1px}
+.top-product-subtitle{font-size:9px;min-height:0;line-height:1.2}
+.top-product-bottom{margin-top:4px;gap:3px}
+.top-product-price{font-size:11px}
+.top-product-cart{width:22px;height:22px;flex-basis:22px;border-radius:7px;font-size:12px;padding:0}
+.top-product-heart{width:19px;height:19px;right:4px;top:4px;font-size:14px}
 }
 @media(max-width:360px){
-.top-products-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-.top-product-image{height:76px}
-.top-product-info{padding:5px}
-.top-product-info h3{font-size:10px}
-.top-product-price{font-size:12px}
-.top-product-cart{width:24px;height:24px;flex-basis:24px}
+.top-products-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.top-product-image{height:48px;padding:3px}
+.top-product-info{padding:4px}
+.top-product-info h3{font-size:9px}
+.top-product-subtitle{font-size:8px}
+.top-product-price{font-size:10px}
+.top-product-cart{width:20px;height:20px;flex-basis:20px;font-size:11px}
+.top-product-heart{width:17px;height:17px;font-size:12px}
 }
 </style></head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="installapp" hidden onclick="installVitrano()">＋ Встановити</button><button class="ghost" id="customeraccountbtn" onclick="go(&quot;profile&quot;)">♙ Кабінет</button><button class="ghost" id="warehousebadge" onclick="showWarehousePicker()">Склад: обрати</button><span class="demo-label" id="mode-label">ЗАВАНТАЖЕННЯ…</span><button class="iconbtn" aria-label="Пошук" onclick="document.querySelector('#search').focus()">⌕</button><button class="iconbtn" aria-label="Кошик" onclick="go('cart')">🛒<sup id="count">0</sup></button></div></header>
