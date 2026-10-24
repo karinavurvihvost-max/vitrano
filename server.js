@@ -401,7 +401,7 @@ async function handle(req, res) {
           pool.query('select count(*)::int as count from products'),
           pool.query('select count(*)::int as count from orders'),
           pool.query('select count(*)::int as count from suppliers where is_active=true'),
-          pool.query("select coalesce(sum(subtotal),0)::numeric(12,2) as revenue from orders where status <> 'cancelled'")
+          pool.query("select coalesce(sum(subtotal),0)::numeric(12,2) as revenue from orders where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення')")
         ]);
         return json(res,200,{products:p.rows[0].count,orders:o.rows[0].count,suppliers:s.rows[0].count,revenue:fin.rows[0].revenue});
       }
@@ -526,9 +526,11 @@ async function handle(req, res) {
         return json(res,200,{message:'Замовлення оновлено.'});
       }
       if(req.method==='GET'&&url.pathname==='/api/admin/finance'){
-        const {rows}=await pool.query(`select count(*)::int as orders_count,count(*) filter(where status not in ('cancelled','returned'))::int as sales_orders_count,coalesce(sum(subtotal) filter(where status not in ('cancelled','returned')),0)::numeric(12,2) as gross_revenue,
-          coalesce(sum(subtotal) filter(where status='delivered'),0)::numeric(12,2) as delivered_revenue,
-          coalesce(sum((select sum(coalesce(i.supplier_cost_snapshot,0)*i.quantity) from order_items i where i.order_id=o.id)) filter(where status not in ('cancelled','returned')),0)::numeric(12,2) as estimated_cost
+        const {rows}=await pool.query(`select count(*) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення'))::int as orders_count,
+          count(*) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення'))::int as sales_orders_count,
+          coalesce(sum(subtotal) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as gross_revenue,
+          coalesce(sum(subtotal) filter(where lower(trim(status))='delivered'),0)::numeric(12,2) as delivered_revenue,
+          coalesce(sum((select sum(coalesce(i.supplier_cost_snapshot,0)*i.quantity) from order_items i where i.order_id=o.id)) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as estimated_cost
           from orders o`);
         return json(res,200,{finance:rows[0],note:'Операційні витрати не внесені; чистий прибуток не розраховується.'});
       }
