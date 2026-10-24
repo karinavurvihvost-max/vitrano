@@ -527,7 +527,7 @@ async function handle(req, res) {
       }
       if(req.method==='GET'&&url.pathname==='/api/admin/finance'){
         const {rows}=await pool.query(`select
-          count(*) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення'))::int as orders_count,
+          count(distinct o.id) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення'))::int as orders_count,
           coalesce(sum((i.unit_price-coalesce(i.supplier_cost_snapshot,0))*i.quantity)
             filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as daily_profit,
           count(*) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')
