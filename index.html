@@ -164,6 +164,15 @@ body{min-width:0;min-height:100%;-webkit-text-size-adjust:100%;text-size-adjust:
 .top-product-heart{width:14px;height:14px;font-size:10px}
 }
 
+/* Similar products: five compact cards per row */
+#similarProducts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+#similarProducts .mini-product{min-width:0;padding:5px;border-radius:12px;overflow:hidden}
+#similarProducts .mini-product-image{height:auto;aspect-ratio:1/1;border-radius:8px;overflow:hidden}
+#similarProducts .mini-product h3{font-size:10px;line-height:1.15;margin:5px 0 3px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+#similarProducts .product-bottom{gap:3px;margin-top:4px}
+#similarProducts .price{font-size:11px;white-space:normal;overflow-wrap:anywhere}
+#similarProducts .addbtn{width:22px;height:22px;min-width:22px;font-size:12px;border-radius:7px}
+@media(max-width:360px){#similarProducts{gap:4px}#similarProducts .mini-product{padding:4px}#similarProducts .mini-product h3{font-size:9px}#similarProducts .price{font-size:10px}#similarProducts .addbtn{width:19px;height:19px;min-width:19px}}
 /* Recently viewed: five compact cards per row */
 #recentProducts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 #recentProducts .mini-product{min-width:0;padding:5px;border-radius:12px;overflow:hidden}
