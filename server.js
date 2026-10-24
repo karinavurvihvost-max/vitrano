@@ -526,13 +526,15 @@ async function handle(req, res) {
         return json(res,200,{message:'Замовлення оновлено.'});
       }
       if(req.method==='GET'&&url.pathname==='/api/admin/finance'){
-        const {rows}=await pool.query(`select count(*) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення'))::int as orders_count,
-          count(*) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення'))::int as sales_orders_count,
-          coalesce(sum(subtotal) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as gross_revenue,
-          coalesce(sum(subtotal) filter(where lower(trim(status))='delivered'),0)::numeric(12,2) as delivered_revenue,
-          coalesce(sum((select sum(coalesce(i.supplier_cost_snapshot,0)*i.quantity) from order_items i where i.order_id=o.id)) filter(where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as estimated_cost
-          from orders o`);
-        return json(res,200,{finance:rows[0],note:'Операційні витрати не внесені; чистий прибуток не розраховується.'});
+        const {rows}=await pool.query(`select
+          count(*) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення'))::int as orders_count,
+          coalesce(sum((i.unit_price-coalesce(i.supplier_cost_snapshot,0))*i.quantity)
+            filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as daily_profit,
+          count(*) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')
+            and exists(select 1 from order_items ix where ix.order_id=o.id and ix.supplier_cost_snapshot is null))::int as orders_missing_cost
+          from orders o left join order_items i on i.order_id=o.id
+          where (o.created_at at time zone 'Europe/Kyiv')::date=(now() at time zone 'Europe/Kyiv')::date`);
+        return json(res,200,{finance:rows[0],note:'Прибуток розраховується за ціною продажу мінус зафіксована собівартість кожної позиції. Якщо собівартість не була збережена в замовленні, розрахунок може бути завищеним.'});
       }
       return json(res,404,{error:'Адмін-маршрут не знайдено.'});
     }
