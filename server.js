@@ -526,9 +526,9 @@ async function handle(req, res) {
         return json(res,200,{message:'Замовлення оновлено.'});
       }
       if(req.method==='GET'&&url.pathname==='/api/admin/finance'){
-        const {rows}=await pool.query(`select count(*)::int as orders_count,coalesce(sum(subtotal) filter(where status<>'cancelled'),0)::numeric(12,2) as gross_revenue,
+        const {rows}=await pool.query(`select count(*)::int as orders_count,coalesce(sum(subtotal) filter(where status not in ('cancelled','returned')),0)::numeric(12,2) as gross_revenue,
           coalesce(sum(subtotal) filter(where status='delivered'),0)::numeric(12,2) as delivered_revenue,
-          coalesce(sum((select sum(coalesce(i.supplier_cost_snapshot,0)*i.quantity) from order_items i where i.order_id=o.id)) filter(where status<>'cancelled'),0)::numeric(12,2) as estimated_cost
+          coalesce(sum((select sum(coalesce(i.supplier_cost_snapshot,0)*i.quantity) from order_items i where i.order_id=o.id)) filter(where status not in ('cancelled','returned')),0)::numeric(12,2) as estimated_cost
           from orders o`);
         return json(res,200,{finance:rows[0],note:'Операційні витрати не внесені; чистий прибуток не розраховується.'});
       }
