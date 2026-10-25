@@ -209,6 +209,62 @@ async function handle(req, res) {
   }
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   try {
+
+    // VITRANO customer support chat
+    if (req.method === 'POST' && url.pathname === '/api/chat/messages') {
+      requireDb();
+      if (rateLimited(req)) return json(res,429,{error:'Забагато повідомлень. Спробуйте за хвилину.'});
+      const b=await readBody(req), message=safeString(b.message,1200);
+      if (!message) return json(res,400,{error:'Напишіть повідомлення.'});
+      let token=safeString(b.token,100);
+      if (!/^[a-f0-9]{64}$/.test(token)) token=randomBytes(32).toString('hex');
+      const tokenHash=hashToken(token);
+      await pool.query(`create table if not exists support_chat_messages (
+        id bigserial primary key, conversation_hash text not null, sender text not null check(sender in ('customer','manager')),
+        message text not null, telegram_message_id bigint, created_at timestamptz not null default now()
+      )`);
+      const ins=await pool.query("insert into support_chat_messages(conversation_hash,sender,message) values($1,'customer',$2) returning id,created_at",[tokenHash,message]);
+      let telegramSent=false;
+      if(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_MANAGER_CHAT_ID){
+        try{
+          const tg=await fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_BOT_TOKEN+'/sendMessage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:process.env.TELEGRAM_MANAGER_CHAT_ID,text:'💬 Нове повідомлення — Менеджер VITRANO\nДіалог: '+token+'\n\n'+message+'\n\nЩоб відповісти, натисніть «Відповісти» на це повідомлення.'})});
+          const td=await tg.json();
+          if(td.ok&&td.result?.message_id){await pool.query('update support_chat_messages set telegram_message_id=$1 where id=$2',[td.result.message_id,ins.rows[0].id]);telegramSent=true;}
+          else console.error('Telegram send failed:',td.description||'unknown');
+        }catch(e){console.error('Telegram send failed:',e.message);}
+      }
+      return json(res,201,{message:{id:ins.rows[0].id,sender:'customer',message,created_at:ins.rows[0].created_at},token,telegramConfigured:Boolean(process.env.TELEGRAM_BOT_TOKEN&&process.env.TELEGRAM_MANAGER_CHAT_ID),telegramSent});
+    }
+    if (req.method === 'GET' && url.pathname === '/api/chat/messages') {
+      requireDb();
+      const token=safeString(url.searchParams.get('token'),100);
+      if(!/^[a-f0-9]{64}$/.test(token)) return json(res,400,{error:'Некоректний діалог.'});
+      await pool.query(`create table if not exists support_chat_messages (
+        id bigserial primary key, conversation_hash text not null, sender text not null check(sender in ('customer','manager')),
+        message text not null, telegram_message_id bigint, created_at timestamptz not null default now()
+      )`);
+      const {rows}=await pool.query('select id,sender,message,created_at from support_chat_messages where conversation_hash=$1 order by id asc limit 200',[hashToken(token)]);
+      return json(res,200,{messages:rows});
+    }
+    if (req.method === 'POST' && url.pathname === '/api/telegram/webhook') {
+      const secret=process.env.TELEGRAM_WEBHOOK_SECRET;
+      if(!secret || req.headers['x-telegram-bot-api-secret-token']!==secret) return json(res,403,{error:'Forbidden'});
+      requireDb();
+      const update=await readBody(req), msg=update.message;
+      if(msg?.reply_to_message?.message_id && msg?.text && String(msg.chat?.id)===String(process.env.TELEGRAM_MANAGER_CHAT_ID||'')){
+        await pool.query(`create table if not exists support_chat_messages (
+          id bigserial primary key, conversation_hash text not null, sender text not null check(sender in ('customer','manager')),
+          message text not null, telegram_message_id bigint, created_at timestamptz not null default now()
+        )`);
+        const parent=await pool.query('select conversation_hash from support_chat_messages where telegram_message_id=$1 limit 1',[msg.reply_to_message.message_id]);
+        if(parent.rows[0]){
+          const reply=safeString(msg.text,1200);
+          if(reply) await pool.query("insert into support_chat_messages(conversation_hash,sender,message) values($1,'manager',$2)",[parent.rows[0].conversation_hash,reply]);
+        }
+      }
+      return json(res,200,{ok:true});
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/health') {
       let databaseConnected = false;
       if (pool) { try { await pool.query('select 1'); databaseConnected = true; } catch {} }
