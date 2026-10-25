@@ -463,6 +463,7 @@ async function handle(req, res) {
       const productMatch=url.pathname.match(/^\/api\/admin\/products\/([0-9a-f-]{36})$/i);
       if (req.method === 'PATCH' && productMatch) {
         const b=await readBody(req), id=productMatch[1];
+        if (b.is_top_product!==undefined) await pool.query("update products set characteristics=coalesce(characteristics,'{}'::jsonb)||jsonb_build_object('vitrano_top_product',$1::boolean),updated_at=now() where id=$2",[Boolean(b.is_top_product),id]);
         if (b.is_visible!==undefined) { await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]); if(Boolean(b.is_visible)) await pool.query('update categories set is_visible=true where id=(select category_id from products where id=$1)',[id]); }
         if (b.name!==undefined) await pool.query('update products set name=$1,updated_at=now() where id=$2',[safeString(b.name,180),id]);
         if (b.sku!==undefined) await pool.query('update products set sku=$1,updated_at=now() where id=$2',[safeString(b.sku,80)||null,id]);
