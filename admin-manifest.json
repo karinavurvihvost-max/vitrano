@@ -1,0 +1,21 @@
+{
+  "id": "/admin.html",
+  "name": "VITRANO Admin",
+  "short_name": "VITRANO Admin",
+  "description": "Мобільна панель керування магазином VITRANO",
+  "lang": "uk",
+  "start_url": "/admin.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#edf5ff",
+  "theme_color": "#0869ed",
+  "icons": [
+    {
+      "src": "/vitrano-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
