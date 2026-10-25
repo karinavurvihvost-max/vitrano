@@ -422,8 +422,8 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
 <button id="vitrano-chat-launch" type="button" aria-label="Відкрити чат із менеджером">💬 Менеджер VITRANO</button>
 <section id="vitrano-chat-panel" aria-label="Чат із менеджером VITRANO">
   <header class="vc-head"><div><strong>Менеджер VITRANO</strong><small>Напишіть нам — відповімо тут</small></div><button class="vc-close" id="vc-close" type="button" aria-label="Закрити чат">×</button></header>
-  <div class="vc-messages" id="vc-messages"><div class="vc-empty">Вітаємо! Напишіть запитання — менеджер побачить його в робочому Telegram, а відповідь з’явиться тут.</div></div>
-  <div class="vc-status" id="vc-status">Ваш Telegram не показується відвідувачам.</div>
+  <div class="vc-messages" id="vc-messages"><div class="vc-empty">Вітаємо! Напишіть запитання — менеджер відповість вам прямо в цьому чаті.</div></div>
+  <div class="vc-status" id="vc-status">Ваші повідомлення бачить лише менеджер VITRANO.</div>
   <form class="vc-form" id="vc-form"><textarea id="vc-input" rows="1" maxlength="1200" placeholder="Ваше повідомлення…" aria-label="Ваше повідомлення" required></textarea><button class="vc-send" id="vc-send" type="submit">➤</button></form>
 </section>
 <script>
@@ -434,7 +434,7 @@ function render(messages){if(!messages.length){list.innerHTML='<div class="vc-em
 async function refresh(){if(!token)return;try{const r=await fetch(api+'/api/chat/messages?token='+encodeURIComponent(token),{cache:'no-store'});const d=await r.json();if(r.ok)render(d.messages||[]);else if(r.status===400){token='';localStorage.removeItem(key)}}catch{}}
 document.getElementById('vitrano-chat-launch').addEventListener('click',()=>{panel.classList.add('open');refresh();input.focus();if(!polling)polling=setInterval(refresh,5000)});
 document.getElementById('vc-close').addEventListener('click',()=>panel.classList.remove('open'));
-form.addEventListener('submit',async e=>{e.preventDefault();const message=input.value.trim();if(!message||loading)return;loading=true;send.disabled=true;status.textContent='Надсилаємо повідомлення…';try{const r=await fetch(api+'/api/chat/messages',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,message})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Не вдалося надіслати повідомлення.');token=d.token;localStorage.setItem(key,token);input.value='';await refresh();status.textContent=d.telegramConfigured?(d.telegramSent?'Повідомлення надіслано менеджеру.':'Повідомлення збережено; сповіщення Telegram не надійшло.'):'Чат збережено. Telegram менеджера ще не підключено.';}catch(err){status.textContent=err.message||'Помилка надсилання. Спробуйте ще раз.'}finally{loading=false;send.disabled=false;input.focus()}});
+form.addEventListener('submit',async e=>{e.preventDefault();const message=input.value.trim();if(!message||loading)return;loading=true;send.disabled=true;status.textContent='Надсилаємо повідомлення…';try{const r=await fetch(api+'/api/chat/messages',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,message})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Не вдалося надіслати повідомлення.');token=d.token;localStorage.setItem(key,token);input.value='';await refresh();status.textContent=d.telegramConfigured?(d.telegramSent?'Повідомлення надіслано менеджеру.':'Повідомлення збережено.'):'Повідомлення збережено. Менеджер відповість у цьому чаті.';}catch(err){status.textContent=err.message||'Помилка надсилання. Спробуйте ще раз.'}finally{loading=false;send.disabled=false;input.focus()}});
 input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit()}});
 })();
 </script>
