@@ -296,7 +296,6 @@ $('#chatReplyForm').addEventListener('submit',async e=>{e.preventDefault();const
 let chatPoll=null;document.querySelector('[data-tab="chat"]')?.addEventListener('click',()=>{chatNotifyReady=true;if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});if(!chatPoll)chatPoll=setInterval(()=>{if(!$('#chat').classList.contains('hidden'))loadChatConversations().catch(()=>{})},8000);loadChatConversations().catch(()=>{})});
 
 key='';load().catch(e=>notice('Не вдалося завантажити панель: '+e.message));
-<script>
+</script><script>
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/admin-sw.js').catch(()=>{}))}
-</script>
 </script></main></html>
