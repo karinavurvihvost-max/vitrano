@@ -463,7 +463,46 @@ body{min-width:0;min-height:100%;-webkit-text-size-adjust:100%;text-size-adjust:
  .easy-card{padding:9px}
  .advantage-item b{font-size:8px}
  .advantage-item small{font-size:7px}
-}</style></head><body>
+}
+/* VITRANO category tiles — glossy 3D glass style */
+.categories .category{
+ position:relative;overflow:hidden;isolation:isolate;
+ border:1px solid rgba(255,255,255,.94);
+ background:linear-gradient(145deg,rgba(255,255,255,.92),rgba(230,242,255,.78));
+ border-radius:23px;padding:17px 8px 15px;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.98),0 8px 22px rgba(28,105,210,.09);
+ transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+.categories .category:before{
+ content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+ background:radial-gradient(circle at 22% 8%,rgba(255,255,255,.95),transparent 42%),linear-gradient(125deg,rgba(89,170,255,.08),transparent 60%);
+}
+.categories .category:active{transform:scale(.97)}
+.categories .cat-icon{
+ position:relative;width:62px;height:62px;margin:0 auto 11px;border-radius:20px;
+ display:grid;place-items:center;font-size:31px;
+ background:linear-gradient(145deg,#ffffff 0%,#dceeff 48%,#b8d9ff 100%);
+ border:1px solid rgba(255,255,255,.95);
+ box-shadow:inset 0 2px 3px rgba(255,255,255,.98),0 7px 13px rgba(25,103,217,.16);
+ filter:drop-shadow(0 3px 3px rgba(34,95,170,.08));
+}
+.categories .category:nth-child(2) .cat-icon{background:linear-gradient(145deg,#fff7d9,#ffdb79 70%,#ffbf47);box-shadow:inset 0 2px 3px #fff8df,0 7px 13px #e5a62b2b}
+.categories .category:nth-child(3) .cat-icon{background:linear-gradient(145deg,#f4eaff,#d9c7ff 70%,#b89aff)}
+.categories .category:nth-child(4) .cat-icon{background:linear-gradient(145deg,#e3fff4,#b6f0d9 70%,#79d9b7)}
+.categories .category:nth-child(5) .cat-icon{background:linear-gradient(145deg,#fff4e5,#ffd5a7 70%,#ffb66c)}
+.categories .category:nth-child(6) .cat-icon{background:linear-gradient(145deg,#e4f5ff,#b8e3ff 70%,#86c8ff)}
+.categories .category:nth-child(7) .cat-icon{background:linear-gradient(145deg,#ffe8ef,#ffc1d0 70%,#ff9db8)}
+.categories .category:nth-child(8) .cat-icon{background:linear-gradient(145deg,#e4edff,#bfd4ff 70%,#8cb4ff)}
+.categories .category>span:last-child{display:block;position:relative;font-size:12px;font-weight:800;letter-spacing:-.15px;color:#254565}
+.filters .chip{box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 4px 12px rgba(35,100,180,.06)}
+.filters .chip.active{box-shadow:0 7px 17px rgba(8,105,237,.25),inset 0 1px 0 rgba(255,255,255,.25)}
+@media(max-width:699px){
+ .categories{gap:9px}
+ .categories .category{border-radius:19px;padding:13px 5px 12px}
+ .categories .cat-icon{width:52px;height:52px;border-radius:17px;font-size:27px;margin-bottom:8px}
+ .categories .category>span:last-child{font-size:11px}
+}
+</style></head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="header-chat-button" type="button" onclick="document.getElementById(&quot;vitrano-chat-launch&quot;).click()">💬 Менеджер</button><div class="install-actions"><button class="ios-install" id="installapp" hidden onclick="installVitrano()"><span class="ios-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="white" stroke-width="2.8"/><path d="M11 26h7l7-11m-7 11-6 10m16-22 10 22m-10-22 7 11h6M18 26h12" fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-copy"><b>Встановити</b><small>Додаток VITRANO</small></span><span class="ios-install-cloud" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M14 31h-2a8 8 0 0 1 1-16 12 12 0 0 1 23 4 7 7 0 0 1 1 14h-7M24 24v17m-7-7 7 7 7-7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-chevron" aria-hidden="true">›</span></button><button class="play-install" id="installapp-play" type="button" onclick="installVitrano()"><span class="play-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><path fill="#00D6A3" d="M7 4.8v38.4L27.4 24z"/><path fill="#4285F4" d="M7 4.8 31.8 18.9 27.4 24z"/><path fill="#FBBC04" d="M27.4 24 31.8 29.1 7 43.2z"/><path fill="#EA4335" d="M31.8 18.9 42 24.7c1.9 1.1 1.9 2.7 0 3.8l-10.2 5.8-4.4-10.3z"/></svg></span><span class="play-install-copy"><b>Google Play</b><small>Додаток VITRANO</small></span><span class="play-install-download" aria-hidden="true">↓</span><span class="ios-install-chevron" aria-hidden="true">›</span></button></div></div></header>
 <main id="storefront"><div class="hero-carousel" id="heroCarousel" aria-label="Головні банери"><section class="hero"><div class="hero-copy"><div class="eyebrow">VITRANO · ТВІЙ СВІТ ПОКУПОК</div><h1>Краще для дому та щоденного життя</h1><p>Знаходь потрібні товари, порівнюй пропозиції та обирай зручно.</p><button class="primary" onclick="go('catalog')">Дивитися каталог　→</button></div><div class="hero-art" aria-hidden="true"></div></section></div>
 
@@ -499,7 +538,7 @@ window.addEventListener('unhandledrejection',function(e){
 </script>
 <script>
 
-const categories=[['Усі товари','✦'],['King size','▣'],['Demi','▣'],['Super slim','▣'],['Без фільтра','▤'],['Duty Free','✈'],['Акциз','✓'],['Новинки','✧']];
+const categories=[['Усі товари','🛍️'],['King size','👑'],['Demi','🚬'],['Super slim','🌿'],['Без фільтра','✨'],['Duty Free','✈️'],['Акциз','🏷️'],['Новинки','💎']];
 const demoProducts=[
 {id:'p1',name:'Зволожувач повітря з підсвіткою',category:'Для дому',price:699,emoji:'💧',desc:'Компактний зволожувач для затишної атмосфери вдома.',supplier:'Склад 1',available:true},
 {id:'p2',name:'Фен для волосся професійний',category:'Краса',price:899,emoji:'💨',desc:'Зручний фен для щоденного догляду за волоссям.',supplier:'Склад 1',available:true},
