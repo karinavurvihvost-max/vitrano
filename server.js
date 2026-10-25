@@ -371,6 +371,9 @@ async function handle(req, res) {
         if (new Set(offers.map(o=>o.supplier_id)).size!==1) {
           await client.query('ROLLBACK'); return json(res,400,{error:'Одне замовлення може містити товари лише одного постачальника. Розділіть кошик.'});
         }
+        if (new Set(offers.map(o=>String(o.supplier_name||'').trim())).size!==1) {
+          await client.query('ROLLBACK'); return json(res,400,{error:'Не можна поєднувати товари зі складу 1 та складу 2 в одному замовленні. Очистіть кошик і виберіть один склад.'});
+        }
         const supplierName = String(offers[0].supplier_name || '').trim();
         const minimumItems = supplierName === 'Склад 1' ? 3 : supplierName === 'Склад 2' ? 2 : 1;
         const totalItems = ids.reduce((sum,id)=>sum+(merged.get(id)||0),0);
