@@ -332,6 +332,8 @@ async function handle(req, res) {
       if (rateLimited(req)) return json(res, 429, { error: 'Забагато спроб. Спробуйте пізніше.' });
       requireDb();
       const body = await readBody(req);
+      const idempotencyKey = safeString(body.idempotency_key,80);
+      if (!/^[0-9a-f-]{36}$/i.test(idempotencyKey)) return json(res,400,{error:'Не вдалося перевірити повторне надсилання. Оновіть сторінку та спробуйте ще раз.'});
       const customer_name = safeString(body.customer_name,120), customer_phone = safeString(body.customer_phone,30);
       const carrier = body.carrier, region = safeString(body.region,100), city = safeString(body.city,100), branch = safeString(body.branch,160);
       const items = Array.isArray(body.items) ? body.items : [];
@@ -349,6 +351,10 @@ async function handle(req, res) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        await client.query(`create table if not exists order_idempotency_keys (idempotency_key text primary key, order_id uuid not null references orders(id) on delete cascade, created_at timestamptz not null default now())`);
+        await client.query('select pg_advisory_xact_lock(hashtext($1))',[idempotencyKey]);
+        const {rows: priorOrders}=await client.query(`select o.id,o.order_number,o.status,o.subtotal,o.created_at from order_idempotency_keys k join orders o on o.id=k.order_id where k.idempotency_key=$1`,[idempotencyKey]);
+        if(priorOrders.length){await client.query('COMMIT');const prior=priorOrders[0];return json(res,200,{order:{id:prior.id,order_number:prior.order_number,status:prior.status,subtotal:prior.subtotal,created_at:prior.created_at},message:'Це замовлення вже було прийнято.'})}
         const ids = [...merged.keys()];
         const { rows: offers } = await client.query(`
           select o.id,o.product_id,o.supplier_id,o.retail_price,o.purchase_cost,o.availability,
@@ -385,6 +391,7 @@ async function handle(req, res) {
           returning id,order_number,status,subtotal,created_at`,
           [customerRows[0].id,customer_name,customer_phone,carrier,region,city,branch,offers[0].supplier_id,subtotal]);
         const order=orders[0];
+        await client.query('insert into order_idempotency_keys(idempotency_key,order_id) values($1,$2)',[idempotencyKey,order.id]);
         for (const id of ids) {
           const o=byId.get(id);
           await client.query(`insert into order_items(order_id,product_id,offer_id,product_name_snapshot,sku_snapshot,supplier_cost_snapshot,unit_price,quantity)
