@@ -717,4 +717,13 @@ form.addEventListener('submit',async e=>{e.preventDefault();const message=input.
 input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit()}});
 })();
 </script>
+<script>
+(()=>{try{
+ const key='vitrano_analytics_visitor';
+ let id=localStorage.getItem(key);
+ if(!id){id=crypto.randomUUID();localStorage.setItem(key,id)}
+ const api='https://vitrano-api.onrender.com/api/analytics/visit';
+ fetch(api,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({visitor_id:id,path:location.pathname}),keepalive:true}).catch(()=>{});
+}catch(e){}})();
+</script>
 </body></html>
