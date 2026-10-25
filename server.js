@@ -300,6 +300,12 @@ async function handle(req, res) {
         if(existing.rows.length && (existing.rows[0].password_hash || existing.rows[0].has_orders)) return json(res,409,{error:'Цей номер уже пов’язаний із замовленнями або кабінетом. Для безпеки зверніться до підтримки, щоб підтвердити номер.'});
         const token=randomBytes(32).toString('base64url');
         const result=await pool.query('insert into customers(full_name,phone,password_hash,session_token_hash,session_expires_at) values($1,$2,$3,$4,now()+interval \'30 days\') on conflict(phone) do update set full_name=excluded.full_name,password_hash=excluded.password_hash,session_token_hash=excluded.session_token_hash,session_expires_at=excluded.session_expires_at,updated_at=now() returning id,full_name,phone',[name,phone,passwordHash(password),hashToken(token)]);
+        await pool.query(`create table if not exists site_analytics_events (
+          id bigserial primary key, visitor_hash text not null, event_type text not null check(event_type in ('visit','registration')),
+          page_path text not null default '/', created_at timestamptz not null default now()
+        )`);
+        await pool.query("insert into site_analytics_events(visitor_hash,event_type,page_path) values($1,'registration','/account')",
+          [createHash('sha256').update('customer:'+result.rows[0].id).digest('hex')]);
         return json(res,201,{token,customer:result.rows[0]});
       }
       if (req.method === 'POST' && url.pathname === '/api/customer/login') {
@@ -327,6 +333,25 @@ async function handle(req, res) {
         return json(res,200,{customer:rows[0],message:'Профіль збережено.'});
       }
       return json(res,404,{error:'Маршрут кабінету не знайдено.'});
+    }
+    if (req.method === 'POST' && url.pathname === '/api/analytics/visit') {
+      requireDb();
+      if (rateLimited(req)) return json(res,429,{error:'Спробуйте пізніше.'});
+      const b=await readBody(req);
+      const visitor=String(b.visitor_id||'');
+      const path=safeString(b.path||'/',200);
+      if(!/^[a-f0-9-]{20,80}$/i.test(visitor)) return json(res,400,{error:'Некоректний ідентифікатор відвідувача.'});
+      await pool.query(`create table if not exists site_analytics_events (
+        id bigserial primary key, visitor_hash text not null, event_type text not null check(event_type in ('visit','registration')),
+        page_path text not null default '/', created_at timestamptz not null default now()
+      )`);
+      const visitorHash=createHash('sha256').update(visitor).digest('hex');
+      await pool.query(`insert into site_analytics_events(visitor_hash,event_type,page_path)
+        select $1,'visit',$2 where not exists (
+          select 1 from site_analytics_events where visitor_hash=$1 and event_type='visit'
+          and created_at > now()-interval '30 minutes'
+        )`,[visitorHash,path]);
+      return json(res,200,{ok:true});
     }
     if (req.method === 'POST' && url.pathname === '/api/orders') {
       if (rateLimited(req)) return json(res, 429, { error: 'Забагато спроб. Спробуйте пізніше.' });
@@ -413,6 +438,29 @@ async function handle(req, res) {
       if (!OPEN_ADMIN_ACCESS) {
         if (!configured) return json(res,503,{error:'Адмін-доступ ще не налаштований.'});
         if ((req.headers.authorization || '') !== 'Bearer ' + configured) return json(res,401,{error:'Потрібна авторизація адміністратора.'});
+      }
+      if(url.pathname==='/api/admin/analytics'&&req.method==='GET'){
+        await pool.query(`create table if not exists site_analytics_events (
+          id bigserial primary key, visitor_hash text not null, event_type text not null check(event_type in ('visit','registration')),
+          page_path text not null default '/', created_at timestamptz not null default now()
+        )`);
+        const {rows}=await pool.query(`
+          select
+            (select count(distinct visitor_hash)::int from site_analytics_events where event_type='visit') as unique_visitors_total,
+            (select count(*)::int from site_analytics_events where event_type='visit') as visits_total,
+            (select count(*)::int from site_analytics_events where event_type='registration') as registrations_total,
+            (select count(distinct visitor_hash)::int from site_analytics_events where event_type='visit' and created_at >= date_trunc('day',now() at time zone 'Europe/Kyiv') at time zone 'Europe/Kyiv') as visitors_today,
+            (select count(*)::int from site_analytics_events where event_type='visit' and created_at >= now()-interval '7 days') as visits_7d,
+            (select count(*)::int from site_analytics_events where event_type='registration' and created_at >= now()-interval '7 days') as registrations_7d,
+            (select count(*)::int from customers) as customer_accounts_total
+        `);
+        const daily=await pool.query(`select to_char(day,'DD.MM') as day,
+          coalesce(v.visitors,0)::int as visitors,coalesce(r.registrations,0)::int as registrations
+          from generate_series(date_trunc('day',now()-interval '6 days'),date_trunc('day',now()),interval '1 day') day
+          left join (select date_trunc('day',created_at) d,count(distinct visitor_hash) visitors from site_analytics_events where event_type='visit' and created_at>=now()-interval '7 days' group by 1) v on v.d=day
+          left join (select date_trunc('day',created_at) d,count(*) registrations from site_analytics_events where event_type='registration' and created_at>=now()-interval '7 days' group by 1) r on r.d=day
+          order by day`);
+        return json(res,200,{analytics:rows[0],daily:daily.rows,note:'Статистика відвідувань збирається з моменту встановлення лічильника; старі відвідування не відновлюються.'});
       }
       if (url.pathname === '/api/admin/chat/conversations' && req.method === 'GET') {
         await pool.query(`create table if not exists support_chat_messages (
