@@ -240,6 +240,17 @@ body{min-width:0;min-height:100%;-webkit-text-size-adjust:100%;text-size-adjust:
  #topProducts .product .product-stock,#top-products .product .product-stock,.top-products .product .product-stock,.top-products-grid .product .product-stock{font-size:8px!important;padding:3px 4px!important;margin-top:4px!important}
  #topProducts .product .product-actions,#top-products .product .product-actions,.top-products .product .product-actions,.top-products-grid .product .product-actions{padding-top:5px!important}
  #topProducts .product .product-cart,#top-products .product .product-cart,.top-products .product .product-cart,.top-products-grid .product .product-cart{min-height:26px!important;font-size:9px!important;padding:3px!important;border-radius:8px!important}
+}
+@media(max-width:620px){
+ #popularProducts.products{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
+ #popularProducts .product{padding:6px!important;border-radius:14px!important;min-width:0}
+ #popularProducts .product-image{aspect-ratio:1/1!important;border-radius:9px!important}
+ #popularProducts .product h3{font-size:10px!important;line-height:1.15!important;min-height:2.3em!important;margin:5px 0 3px!important}
+ #popularProducts .product .price{font-size:11px!important}
+ #popularProducts .product .product-rating{font-size:8px!important;min-height:20px!important;margin:0 0 4px!important}
+ #popularProducts .product .product-stock{font-size:8px!important;padding:3px 4px!important;margin-top:4px!important}
+ #popularProducts .product .product-actions{padding-top:5px!important}
+ #popularProducts .product .product-cart{min-height:26px!important;font-size:9px!important;padding:3px!important;border-radius:8px!important}
 }</style></head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="installapp" hidden onclick="installVitrano()">＋ Встановити</button><button class="ghost" id="customeraccountbtn" onclick="go(&quot;profile&quot;)">♙ Кабінет</button><button class="ghost" id="warehousebadge" onclick="showWarehousePicker()">Склад: обрати</button><span class="demo-label" id="mode-label">ЗАВАНТАЖЕННЯ…</span><button class="iconbtn" aria-label="Пошук" onclick="document.querySelector('#search').focus()">⌕</button><button class="iconbtn" aria-label="Кошик" onclick="go('cart')">🛒<sup id="count">0</sup></button></div></header>
 <main id="storefront"><div class="hero-carousel" id="heroCarousel" aria-label="Головні банери"><section class="hero"><div class="hero-copy"><div class="eyebrow">VITRANO · ТВІЙ СВІТ ПОКУПОК</div><h1>Краще для дому та щоденного життя</h1><p>Знаходь потрібні товари, порівнюй пропозиції та обирай зручно.</p><button class="primary" onclick="go('catalog')">Дивитися каталог　→</button></div><div class="hero-art" aria-hidden="true"></div></section></div>
