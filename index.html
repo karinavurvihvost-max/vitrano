@@ -205,7 +205,17 @@ body{min-width:0;min-height:100%;-webkit-text-size-adjust:100%;text-size-adjust:
 }
 .product .price,.product-bottom .price{color:#0869ed!important}
 .product-stock:before{content:none}
-</style></head><body>
+
+/* Four compact mini-cards per row in recently viewed and similar products */
+@media(max-width:620px){
+#similarProducts,#recentProducts{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:7px!important}
+#similarProducts .mini-product,#recentProducts .mini-product{min-width:0;padding:5px!important;border-radius:13px!important}
+#similarProducts .mini-product-image,#recentProducts .mini-product-image{height:auto!important;aspect-ratio:1/1;border-radius:9px!important}
+#similarProducts .mini-product h3,#recentProducts .mini-product h3{font-size:clamp(9px,2.7vw,12px)!important;line-height:1.15!important;margin:5px 0 3px!important;min-height:2.3em;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+#similarProducts .product-bottom,#recentProducts .product-bottom{display:flex;align-items:center;justify-content:space-between;gap:2px;margin-top:5px!important}
+#similarProducts .price,#recentProducts .price{font-size:clamp(9px,2.8vw,12px)!important;line-height:1.15;white-space:normal;overflow-wrap:anywhere}
+#similarProducts .addbtn,#recentProducts .addbtn{width:22px!important;height:22px!important;min-width:22px!important;font-size:12px!important;border-radius:7px!important}
+}</style></head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="installapp" hidden onclick="installVitrano()">＋ Встановити</button><button class="ghost" id="customeraccountbtn" onclick="go(&quot;profile&quot;)">♙ Кабінет</button><button class="ghost" id="warehousebadge" onclick="showWarehousePicker()">Склад: обрати</button><span class="demo-label" id="mode-label">ЗАВАНТАЖЕННЯ…</span><button class="iconbtn" aria-label="Пошук" onclick="document.querySelector('#search').focus()">⌕</button><button class="iconbtn" aria-label="Кошик" onclick="go('cart')">🛒<sup id="count">0</sup></button></div></header>
 <main id="storefront"><div class="hero-carousel" id="heroCarousel" aria-label="Головні банери"><section class="hero"><div class="hero-copy"><div class="eyebrow">VITRANO · ТВІЙ СВІТ ПОКУПОК</div><h1>Краще для дому та щоденного життя</h1><p>Знаходь потрібні товари, порівнюй пропозиції та обирай зручно.</p><button class="primary" onclick="go('catalog')">Дивитися каталог　→</button></div><div class="hero-art" aria-hidden="true"></div></section></div>
 
