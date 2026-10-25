@@ -257,6 +257,27 @@ body{min-width:0;min-height:100%;-webkit-text-size-adjust:100%;text-size-adjust:
 #vitrano-chat-panel{position:fixed;right:18px;bottom:calc(82px + env(safe-area-inset-bottom));z-index:9999;width:min(370px,calc(100vw - 24px));height:min(530px,calc(100dvh - 115px));background:#fff;border:1px solid #dce8f8;border-radius:24px;box-shadow:0 22px 70px #153e702e;display:none;overflow:hidden;flex-direction:column}
 #vitrano-chat-panel.open{display:flex}.vc-head{padding:17px 18px;color:white;background:linear-gradient(120deg,#2786ff,#075ce4);display:flex;align-items:center;justify-content:space-between}.vc-head strong{display:block;font-size:16px}.vc-head small{display:block;margin-top:4px;opacity:.88}.vc-close{border:0;background:#ffffff24;color:#fff;border-radius:10px;width:34px;height:34px;font-size:20px}.vc-messages{flex:1;overflow:auto;padding:15px;background:linear-gradient(#f5f9ff,#edf5ff);display:flex;flex-direction:column;gap:9px}.vc-msg{max-width:86%;padding:10px 12px;border-radius:15px;font-size:14px;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap}.vc-msg.customer{align-self:flex-end;color:#fff;background:#1475f8;border-bottom-right-radius:5px}.vc-msg.manager{align-self:flex-start;background:#fff;border:1px solid #dce8f8;border-bottom-left-radius:5px}.vc-empty{font-size:13px;color:#6b7f99;line-height:1.5;text-align:center;margin:auto;padding:15px}.vc-form{display:flex;gap:8px;padding:11px;border-top:1px solid #e4edf9;background:#fff}.vc-form textarea{flex:1;resize:none;min-width:0;max-height:90px;border:1px solid #dce7f6;border-radius:13px;padding:11px;outline-color:#86baff}.vc-send{border:0;border-radius:13px;background:#0869ed;color:#fff;font-weight:800;padding:0 14px}.vc-status{padding:0 13px 9px;color:#7a8ca4;font-size:11px;background:#fff}
 @media(max-width:480px){#vitrano-chat-launch{right:12px;bottom:calc(12px + env(safe-area-inset-bottom));padding:13px 15px}#vitrano-chat-panel{right:8px;bottom:calc(74px + env(safe-area-inset-bottom));width:calc(100vw - 16px);height:min(570px,calc(100dvh - 95px));border-radius:20px}}
+/* Compact iOS-style customer chat */
+#vitrano-chat-launch{padding:11px 15px;gap:7px;font-size:14px;box-shadow:0 7px 22px #075ce42b;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+#vitrano-chat-panel{right:16px;bottom:calc(72px + env(safe-area-inset-bottom));width:min(340px,calc(100vw - 28px));height:min(440px,calc(100dvh - 120px));border:1px solid #ffffffc9;border-radius:22px;background:rgba(250,252,255,.94);box-shadow:0 18px 55px #1d3b6426;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.vc-head{padding:12px 14px;background:linear-gradient(135deg,#1684ff,#0862e8)}
+.vc-head strong{font-size:15px;letter-spacing:-.2px}.vc-head small{font-size:12px;margin-top:2px}
+.vc-close{width:30px;height:30px;border-radius:50%;background:#ffffff30;font-size:19px}
+.vc-messages{padding:12px;gap:7px;background:linear-gradient(180deg,#f6f9ff,#eef4fc)}
+.vc-msg{max-width:84%;padding:8px 11px;border-radius:17px;font-size:13px;line-height:1.4;box-shadow:0 1px 2px #172f4a0a}
+.vc-msg.customer{border-bottom-right-radius:6px}.vc-msg.manager{border-bottom-left-radius:6px}
+.vc-empty{font-size:12px;padding:12px}
+.vc-status{padding:5px 11px 7px;font-size:10px;border-top:1px solid #edf1f7}
+.vc-form{padding:8px;gap:7px;background:rgba(255,255,255,.94)}
+.vc-form textarea{min-height:42px;max-height:76px;padding:10px 12px;border-radius:20px;border-color:#d9e4f2;background:#f7f9fc;font-size:14px}
+.vc-send{width:42px;height:42px;flex:0 0 42px;padding:0;border-radius:50%;box-shadow:0 3px 10px #0869ed2c}
+@media(max-width:480px){
+#vitrano-chat-launch{right:12px;bottom:calc(12px + env(safe-area-inset-bottom));padding:10px 14px;font-size:13px}
+#vitrano-chat-panel{right:10px;bottom:calc(68px + env(safe-area-inset-bottom));width:calc(100vw - 20px);height:min(430px,58dvh,calc(100dvh - 115px));min-height:300px;border-radius:22px}
+.vc-head{padding:11px 13px}
+.vc-messages{padding:10px}
+.vc-form{padding:7px}
+}
 </style></head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="installapp" hidden onclick="installVitrano()">＋ Встановити</button><button class="ghost" id="customeraccountbtn" onclick="go(&quot;profile&quot;)">♙ Кабінет</button><button class="ghost" id="warehousebadge" onclick="showWarehousePicker()">Склад: обрати</button><span class="demo-label" id="mode-label">ЗАВАНТАЖЕННЯ…</span><button class="iconbtn" aria-label="Пошук" onclick="document.querySelector('#search').focus()">⌕</button><button class="iconbtn" aria-label="Кошик" onclick="go('cart')">🛒<sup id="count">0</sup></button></div></header>
 <main id="storefront"><div class="hero-carousel" id="heroCarousel" aria-label="Головні банери"><section class="hero"><div class="hero-copy"><div class="eyebrow">VITRANO · ТВІЙ СВІТ ПОКУПОК</div><h1>Краще для дому та щоденного життя</h1><p>Знаходь потрібні товари, порівнюй пропозиції та обирай зручно.</p><button class="primary" onclick="go('catalog')">Дивитися каталог　→</button></div><div class="hero-art" aria-hidden="true"></div></section></div>
