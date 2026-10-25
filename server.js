@@ -210,7 +210,7 @@ async function handle(req, res) {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   try {
 
-    // VITRANO customer support chat
+    // VITRANO customer support chat — replies are handled only in the admin panel
     if (req.method === 'POST' && url.pathname === '/api/chat/messages') {
       requireDb();
       if (rateLimited(req)) return json(res,429,{error:'Забагато повідомлень. Спробуйте за хвилину.'});
@@ -221,19 +221,10 @@ async function handle(req, res) {
       const tokenHash=hashToken(token);
       await pool.query(`create table if not exists support_chat_messages (
         id bigserial primary key, conversation_hash text not null, sender text not null check(sender in ('customer','manager')),
-        message text not null, telegram_message_id bigint, created_at timestamptz not null default now()
+        message text not null, created_at timestamptz not null default now()
       )`);
       const ins=await pool.query("insert into support_chat_messages(conversation_hash,sender,message) values($1,'customer',$2) returning id,created_at",[tokenHash,message]);
-      let telegramSent=false;
-      if(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_MANAGER_CHAT_ID){
-        try{
-          const tg=await fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_BOT_TOKEN+'/sendMessage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:process.env.TELEGRAM_MANAGER_CHAT_ID,text:'💬 Нове повідомлення — Менеджер VITRANO\nДіалог: '+token+'\n\n'+message+'\n\nЩоб відповісти, натисніть «Відповісти» на це повідомлення.'})});
-          const td=await tg.json();
-          if(td.ok&&td.result?.message_id){await pool.query('update support_chat_messages set telegram_message_id=$1 where id=$2',[td.result.message_id,ins.rows[0].id]);telegramSent=true;}
-          else console.error('Telegram send failed:',td.description||'unknown');
-        }catch(e){console.error('Telegram send failed:',e.message);}
-      }
-      return json(res,201,{message:{id:ins.rows[0].id,sender:'customer',message,created_at:ins.rows[0].created_at},token,telegramConfigured:Boolean(process.env.TELEGRAM_BOT_TOKEN&&process.env.TELEGRAM_MANAGER_CHAT_ID),telegramSent});
+      return json(res,201,{message:{id:ins.rows[0].id,sender:'customer',message,created_at:ins.rows[0].created_at},token});
     }
     if (req.method === 'GET' && url.pathname === '/api/chat/messages') {
       requireDb();
@@ -241,30 +232,11 @@ async function handle(req, res) {
       if(!/^[a-f0-9]{64}$/.test(token)) return json(res,400,{error:'Некоректний діалог.'});
       await pool.query(`create table if not exists support_chat_messages (
         id bigserial primary key, conversation_hash text not null, sender text not null check(sender in ('customer','manager')),
-        message text not null, telegram_message_id bigint, created_at timestamptz not null default now()
+        message text not null, created_at timestamptz not null default now()
       )`);
       const {rows}=await pool.query('select id,sender,message,created_at from support_chat_messages where conversation_hash=$1 order by id asc limit 200',[hashToken(token)]);
       return json(res,200,{messages:rows});
     }
-    if (req.method === 'POST' && url.pathname === '/api/telegram/webhook') {
-      const secret=process.env.TELEGRAM_WEBHOOK_SECRET;
-      if(!secret || req.headers['x-telegram-bot-api-secret-token']!==secret) return json(res,403,{error:'Forbidden'});
-      requireDb();
-      const update=await readBody(req), msg=update.message;
-      if(msg?.reply_to_message?.message_id && msg?.text && String(msg.chat?.id)===String(process.env.TELEGRAM_MANAGER_CHAT_ID||'')){
-        await pool.query(`create table if not exists support_chat_messages (
-          id bigserial primary key, conversation_hash text not null, sender text not null check(sender in ('customer','manager')),
-          message text not null, telegram_message_id bigint, created_at timestamptz not null default now()
-        )`);
-        const parent=await pool.query('select conversation_hash from support_chat_messages where telegram_message_id=$1 limit 1',[msg.reply_to_message.message_id]);
-        if(parent.rows[0]){
-          const reply=safeString(msg.text,1200);
-          if(reply) await pool.query("insert into support_chat_messages(conversation_hash,sender,message) values($1,'manager',$2)",[parent.rows[0].conversation_hash,reply]);
-        }
-      }
-      return json(res,200,{ok:true});
-    }
-
     if (req.method === 'GET' && url.pathname === '/api/health') {
       let databaseConnected = false;
       if (pool) { try { await pool.query('select 1'); databaseConnected = true; } catch {} }
@@ -431,6 +403,38 @@ async function handle(req, res) {
       if (!OPEN_ADMIN_ACCESS) {
         if (!configured) return json(res,503,{error:'Адмін-доступ ще не налаштований.'});
         if ((req.headers.authorization || '') !== 'Bearer ' + configured) return json(res,401,{error:'Потрібна авторизація адміністратора.'});
+      }
+      if (url.pathname === '/api/admin/chat/conversations' && req.method === 'GET') {
+        await pool.query(`create table if not exists support_chat_messages (
+          id bigserial primary key, conversation_hash text not null, sender text not null check(sender in ('customer','manager')),
+          message text not null, created_at timestamptz not null default now()
+        )`);
+        const {rows}=await pool.query(`
+          select distinct on (conversation_hash) conversation_hash,
+            first_value(id) over(partition by conversation_hash order by id) as first_message_id,
+            first_value(created_at) over(partition by conversation_hash order by id) as started_at,
+            sender as last_sender,message as last_message,created_at as last_at,
+            (select count(*)::int from support_chat_messages x where x.conversation_hash=m.conversation_hash and x.sender='customer') as customer_messages,
+            (select count(*)::int from support_chat_messages x where x.conversation_hash=m.conversation_hash and x.sender='manager') as manager_messages
+          from support_chat_messages m
+          order by conversation_hash, id desc
+        `);
+        return json(res,200,{conversations:rows});
+      }
+      if (url.pathname === '/api/admin/chat/messages' && req.method === 'GET') {
+        const conversation=safeString(url.searchParams.get('conversation'),64);
+        if(!/^[a-f0-9]{64}$/.test(conversation))return json(res,400,{error:'Некоректний діалог.'});
+        const {rows}=await pool.query('select id,sender,message,created_at from support_chat_messages where conversation_hash=$1 order by id asc limit 300',[conversation]);
+        return json(res,200,{messages:rows});
+      }
+      if (url.pathname === '/api/admin/chat/reply' && req.method === 'POST') {
+        if(rateLimited(req))return json(res,429,{error:'Забагато запитів. Спробуйте пізніше.'});
+        const b=await readBody(req),conversation=safeString(b.conversation_hash,64),message=safeString(b.message,1200);
+        if(!/^[a-f0-9]{64}$/.test(conversation)||!message)return json(res,400,{error:'Перевірте діалог і текст відповіді.'});
+        const exists=await pool.query('select 1 from support_chat_messages where conversation_hash=$1 limit 1',[conversation]);
+        if(!exists.rowCount)return json(res,404,{error:'Діалог не знайдено.'});
+        const {rows}=await pool.query("insert into support_chat_messages(conversation_hash,sender,message) values($1,'manager',$2) returning id,sender,message,created_at",[conversation,message]);
+        return json(res,201,{message:rows[0]});
       }
       if (req.method === 'GET' && url.pathname === '/api/admin/storefront-settings') {
         const {rows}=await pool.query("select setting_value from storefront_settings where setting_key='hero_banner' limit 1");
@@ -602,4 +606,4 @@ async function handle(req, res) {
     return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
   }
 }
-http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>{ console.log(`VITRANO API listening on ${PORT}`); if(process.env.TELEGRAM_BOT_TOKEN&&process.env.TELEGRAM_WEBHOOK_SECRET){fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_BOT_TOKEN+'/setWebhook',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://vitrano-api.onrender.com/api/telegram/webhook',secret_token:process.env.TELEGRAM_WEBHOOK_SECRET,allowed_updates:['message']})}).then(r=>r.json()).then(d=>console.log('TELEGRAM_WEBHOOK_SETUP '+JSON.stringify({ok:d.ok,description:d.description||''}))).catch(e=>console.error('TELEGRAM_WEBHOOK_SETUP_FAILED '+e.message));} if(process.env.SIGA_IMPORT_ON_START==='true'){ importSigaCatalog().then(result=>console.log('SIGA_IMPORT_RESULT '+JSON.stringify(result))).catch(error=>console.error('SIGA_IMPORT_FAILED '+error.message)); } });
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>{ console.log(`VITRANO API listening on ${PORT}`); if(process.env.SIGA_IMPORT_ON_START==='true'){ importSigaCatalog().then(result=>console.log('SIGA_IMPORT_RESULT '+JSON.stringify(result))).catch(error=>console.error('SIGA_IMPORT_FAILED '+error.message)); } });
