@@ -185,6 +185,11 @@ async function importSigaCatalog() {
 }
 
 const passwordHash = password => scryptSync(password, 'vitrano-customer-v1', 64).toString('hex');
+async function ensureWarehouseSchema() {
+  await pool.query('alter table suppliers add column if not exists min_order_items integer');
+  await pool.query("update suppliers set min_order_items=case when name='Склад 1' then 3 when name='Склад 2' then 2 when name='Склад 3' then 3 else 1 end where min_order_items is null or (name in ('Склад 1','Склад 2','Склад 3') and min_order_items <> case when name='Склад 1' then 3 when name='Склад 2' then 2 else 3 end)");
+}
+
 async function ensureCustomerAuthSchema() {
   await pool.query('alter table customers add column if not exists password_hash text');
   await pool.query('alter table customers add column if not exists session_token_hash text');
@@ -209,6 +214,7 @@ async function handle(req, res) {
   }
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   try {
+    if (pool && ['/api/admin/suppliers','/api/admin/suppliers/visibility','/api/admin/suppliers/create','/api/admin/suppliers/offers','/api/warehouses'].includes(url.pathname)) await ensureWarehouseSchema();
 
     // VITRANO customer support chat — replies are handled only in the admin panel
     if (req.method === 'POST' && url.pathname === '/api/chat/messages') {
@@ -400,7 +406,8 @@ async function handle(req, res) {
           await client.query('ROLLBACK'); return json(res,400,{error:'Не можна поєднувати товари зі складу 1 та складу 2 в одному замовленні. Очистіть кошик і виберіть один склад.'});
         }
         const supplierName = String(offers[0].supplier_name || '').trim();
-        const minimumItems = supplierName === 'Склад 1' ? 3 : supplierName === 'Склад 2' ? 2 : 1;
+        const minResult = await client.query('select coalesce(min_order_items,case when name=$1 then 3 when name=$2 then 2 when name=$3 then 3 else 1 end) as minimum from suppliers where id=$4',['Склад 1','Склад 2','Склад 3',offers[0].supplier_id]);
+        const minimumItems = Number(minResult.rows[0]?.minimum) || (supplierName === 'Склад 1' ? 3 : supplierName === 'Склад 2' ? 2 : supplierName === 'Склад 3' ? 3 : 1);
         const totalItems = ids.reduce((sum,id)=>sum+(merged.get(id)||0),0);
         if (totalItems < minimumItems) {
           await client.query('ROLLBACK');
@@ -547,14 +554,152 @@ async function handle(req, res) {
       }
       if (req.method === 'POST' && url.pathname === '/api/admin/suppliers/visibility') {
         const b=await readBody(req), name=safeString(b.name,100), visible=b.visible===true;
-        if(!['Склад 1','Склад 2'].includes(name)) return json(res,400,{error:'Можна змінювати видимість лише стандартних складів.'});
-        const result=await pool.query('update suppliers set is_active=$1 where name=$2 returning id,name,is_active',[visible,name]);
+        if(!/^Склад \d+$/.test(name)) return json(res,400,{error:'Можна змінювати видимість лише складів VITRANO.'});
+        const result=await pool.query('update suppliers set is_active=$1 where name=$2 returning id,name,is_active,min_order_items',[visible,name]);
         if(!result.rowCount) return json(res,404,{error:'Склад не знайдено в налаштуваннях.'});
-        return json(res,200,{supplier:result.rows[0],message:visible?'Склад знову показується покупцям.':'Склад прихований от покупателей.'});
+        return json(res,200,{supplier:result.rows[0],message:visible?'Склад знову показується покупцям.':'Склад приховано від покупців.'});
+      }
+      if (req.method === 'POST' && url.pathname === '/api/admin/suppliers/create') {
+        const b=await readBody(req), name=safeString(b.name,100), min=Math.floor(Number(b.min_order_items));
+        if(!/^Склад \d+$/.test(name)||!Number.isInteger(min)||min<1||min>100) return json(res,400,{error:'Вкажіть назву складу формату «Склад 3» та мінімум від 1 до 100 товарів.'});
+        const result=await pool.query('insert into suppliers(name,is_active,min_order_items) values($1,false,$2) on conflict(name) do update set min_order_items=excluded.min_order_items returning id,name,is_active,min_order_items',[name,min]);
+        return json(res,200,{supplier:result.rows[0],message:'Налаштування складу збережено. Увімкніть його, коли асортимент буде готовий.'});
+      }
+      if (req.method === 'POST' && url.pathname === '/api/admin/suppliers/offers') {
+        const b=await readBody(req), productId=safeString(b.product_id,50), name=safeString(b.warehouse_name,100), price=Number(b.retail_price), cost=b.purchase_cost==null||b.purchase_cost===''?null:Number(b.purchase_cost), availability=['available','check','unavailable'].includes(b.availability)?b.availability:'check';
+        if(!/^Склад \d+$/.test(name)||!productId||!Number.isFinite(price)||price<=0||(cost!==null&&(!Number.isFinite(cost)||cost<0))) return json(res,400,{error:'Перевірте склад, товар, ціну продажу та собівартість.'});
+        const supplier=await pool.query('select id,name from suppliers where name=$1',[name]);
+        if(!supplier.rowCount) return json(res,404,{error:'Спочатку створіть склад.'});
+        const product=await pool.query('select id,name from products where id=$1',[productId]);
+        if(!product.rowCount) return json(res,404,{error:'Існуючий товар не знайдено.'});
+        const offer=await pool.query("insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true) on conflict(product_id,supplier_id) do update set purchase_cost=excluded.purchase_cost,retail_price=excluded.retail_price,availability=excluded.availability,is_active=true,updated_at=now() returning id,product_id,supplier_id,retail_price,purchase_cost,availability,is_active",[productId,supplier.rows[0].id,cost,price,availability]);
+        await pool.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)',['warehouse.offer.assign','product',productId,JSON.stringify({warehouse:name,offer_id:offer.rows[0].id})]);
+        return json(res,200,{offer:offer.rows[0],product:product.rows[0],warehouse_name:name,message:'Існуючий товар додано на '+name+' без створення дублікату.'});
       }
       if (req.method === 'GET' && url.pathname === '/api/admin/suppliers') {
-        const {rows}=await pool.query('select id,name,contact_name,phone,messenger,is_active,notes,created_at from suppliers order by created_at desc');
+        const {rows}=await pool.query('select id,name,contact_name,phone,messenger,is_active,notes,min_order_items,created_at from suppliers order by created_at desc');
         return json(res,200,{suppliers:rows});
+      }
+      if (req.method === 'GET' && url.pathname === '/api/warehouses') {
+        const {rows}=await pool.query("select id,name,is_active,coalesce(min_order_items,case when name='Склад 1' then 3 when name='Склад 2' then 2 when name='Склад 3' then 3 else 1 end) as min_order_items from suppliers where is_active=true and name ~ '^Склад [0-9]+
+      if (req.method === 'POST' && url.pathname === '/api/admin/products') {
+        const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), mode=safeString(b.supplier_mode,40);
+        const price1=b.price_1==null||b.price_1===''?null:Number(b.price_1), price2=b.price_2==null||b.price_2===''?null:Number(b.price_2), cost1=b.purchase_cost_1===''||b.purchase_cost_1==null?null:Number(b.purchase_cost_1), cost2=b.purchase_cost_2===''||b.purchase_cost_2==null?null:Number(b.purchase_cost_2), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
+        const warehouses=mode==='both'?['Склад 1','Склад 2']:['Склад 1','Склад 2'].includes(mode)?[mode]:[];
+        if(name.length<2||!category||!warehouses.length||(warehouses.includes('Склад 1')&&(!Number.isFinite(price1)||price1<=0))||(warehouses.includes('Склад 2')&&(!Number.isFinite(price2)||price2<=0))||(cost!==null&&(!Number.isFinite(cost)||cost<0))||(warehouses.includes('Склад 1')&&cost1!==null&&(!Number.isFinite(cost1)||cost1<0))||(warehouses.includes('Склад 2')&&cost2!==null&&(!Number.isFinite(cost2)||cost2<0))) return json(res,400,{error:'Перевірте назву, постачальника, ціну продажу та ціну постачальника.'});
+        const slug=(safeString(b.slug,180)||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,170)+'-'+Date.now().toString(36);
+        const client=await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const catSlug=category.toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'other';
+          const cat=await client.query('insert into categories(name,slug) values($1,$2) on conflict(name) do update set name=excluded.name returning id',[category,catSlug]);
+          const p=await client.query('insert into products(sku,name,slug,description,category_id,image_urls,main_image_url,is_visible) values($1,$2,$3,$4,$5,$6,$7,$8) returning id',
+            [safeString(b.sku,80)||null,name,slug,safeString(b.description,3000),cat.rows[0].id,Array.isArray(b.image_urls)?b.image_urls.filter(x=>typeof x==='string'&&/^https:\/\//.test(x)).slice(0,8):[],(typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000))||null,b.is_visible===true]);
+          for (const warehouse of warehouses) {
+            let sup=await client.query('select id from suppliers where name=$1 order by created_at limit 1',[warehouse]);
+            if(!sup.rows.length) sup=await client.query('insert into suppliers(name) values($1) returning id',[warehouse]);
+            const price=warehouse==='Склад 1'?price1:price2, offerCost=warehouse==='Склад 1'?(cost1===null?cost:cost1):(cost2===null?cost:cost2);
+            const offer=await client.query('insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true) returning id',
+              [p.rows[0].id,sup.rows[0].id,offerCost,price,['available','check','unavailable'].includes(b.availability)?b.availability:'check']);
+            if (b.markup_type && ['amount','percent'].includes(b.markup_type) && Number.isFinite(Number(b.markup_value)) && Number(b.markup_value)>=0) {
+              await client.query("update products set characteristics=coalesce(characteristics,'{}'::jsonb)||jsonb_build_object('vitrano_markup',coalesce(characteristics->'vitrano_markup','{}'::jsonb)||jsonb_build_object($1::text,jsonb_build_object('type',$2::text,'value',$3::numeric))) where id=$4",
+                [offer.rows[0].id,b.markup_type,Number(b.markup_value),p.rows[0].id]);
+            }
+          }
+          await client.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)', ['product.create','product',p.rows[0].id,JSON.stringify({name})]);
+          await client.query('COMMIT');
+          return json(res,201,{id:p.rows[0].id,message:'Товар створено.'});
+        } catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;} finally{client.release();}
+      }
+      const productMatch=url.pathname.match(/^\/api\/admin\/products\/([0-9a-f-]{36})$/i);
+      if (req.method === 'PATCH' && productMatch) {
+        const b=await readBody(req), id=productMatch[1];
+        if (b.is_top_product!==undefined||b.show_in_promotions!==undefined) await pool.query("update products set characteristics=coalesce(characteristics,'{}'::jsonb)||jsonb_strip_nulls(jsonb_build_object('vitrano_top_product',$1::boolean,'vitrano_show_promo',$2::boolean)),updated_at=now() where id=$3",[b.is_top_product===undefined?null:Boolean(b.is_top_product),b.show_in_promotions===undefined?null:Boolean(b.show_in_promotions),id]);
+        if (b.is_visible!==undefined) { await pool.query('update products set is_visible=$1,updated_at=now() where id=$2',[Boolean(b.is_visible),id]); if(Boolean(b.is_visible)) await pool.query('update categories set is_visible=true where id=(select category_id from products where id=$1)',[id]); }
+        if (b.name!==undefined) await pool.query('update products set name=$1,updated_at=now() where id=$2',[safeString(b.name,180),id]);
+        if (b.sku!==undefined) await pool.query('update products set sku=$1,updated_at=now() where id=$2',[safeString(b.sku,80)||null,id]);
+        if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
+        if (b.promo_price!==undefined||b.promotion_start!==undefined||b.promotion_end!==undefined) { const raw=b.promo_price; const promo=raw===null||raw===''?null:Number(raw); if(raw!==undefined&&raw!==null&&raw!==''&&(!Number.isFinite(promo)||promo<0))return json(res,400,{error:'Некоректна акційна ціна.'}); const start=b.promotion_start?new Date(b.promotion_start):null,end=b.promotion_end?new Date(b.promotion_end):null; if(b.promotion_start&&Number.isNaN(start.getTime()))return json(res,400,{error:'Некоректна дата початку акції.'}); if(b.promotion_end&&Number.isNaN(end.getTime()))return json(res,400,{error:'Некоректна дата завершення акції.'}); if(start&&end&&end<=start)return json(res,400,{error:'Завершення акції має бути пізніше початку.'}); await pool.query('update products set promo_price=$1,promotion_start=$2,promotion_end=$3,updated_at=now() where id=$4',[raw===undefined?null:promo,b.promotion_start||null,b.promotion_end||null,id]); }
+        if (b.category!==undefined) { const category=safeString(b.category,100)||'Інше'; const slug=category.toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'other'; const cat=await pool.query('insert into categories(name,slug) values($1,$2) on conflict(name) do update set name=excluded.name returning id',[category,slug]); await pool.query('update products set category_id=$1,updated_at=now() where id=$2',[cat.rows[0].id,id]); }
+        if (b.main_image_url!==undefined) { const img=typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000); if(typeof img==='string'&&img.startsWith('data:image/')&&img.length>1500000)return json(res,400,{error:'Фото завелике. Виберіть менше фото.'}); await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[img||null,id]); }
+        if (b.image_urls!==undefined) { if(!Array.isArray(b.image_urls)||b.image_urls.length>8||b.image_urls.some(x=>typeof x!=='string'||(!/^https:\/\//i.test(x)&&!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(x))||x.length>1500000)) return json(res,400,{error:'Фото: додайте до 8 коректних HTTPS-посилань або зображень у підтримуваному форматі.'}); await pool.query('update products set image_urls=$1,updated_at=now() where id=$2',[b.image_urls,id]); }
+        if (b.offer_id && (b.retail_price!==undefined||b.purchase_cost!==undefined||b.availability!==undefined)) {
+          if (b.retail_price!==undefined && (!Number.isFinite(Number(b.retail_price)) || Number(b.retail_price)<0)) return json(res,400,{error:'Некоректна ціна.'});
+          if (b.purchase_cost!==undefined && b.purchase_cost!==null && (!Number.isFinite(Number(b.purchase_cost)) || Number(b.purchase_cost)<0)) return json(res,400,{error:'Некоректна собівартість.'});
+          if (b.availability!==undefined && !['available','check','unavailable'].includes(b.availability)) return json(res,400,{error:'Некоректний статус наявності.'});
+          if (b.markup_type!==undefined && !['amount','percent'].includes(b.markup_type)) return json(res,400,{error:'Некоректний тип націнки.'});
+          if (b.markup_value!==undefined && (!Number.isFinite(Number(b.markup_value)) || Number(b.markup_value)<0)) return json(res,400,{error:'Некоректне значення націнки.'});
+          const offerUpdate=await pool.query(
+            'update supplier_offers set retail_price=coalesce($1,retail_price), purchase_cost=case when $2::boolean then $3::numeric else purchase_cost end, availability=coalesce($4,availability), updated_at=now() where id=$5 and product_id=$6',
+            [b.retail_price===undefined?null:Number(b.retail_price),b.purchase_cost!==undefined,b.purchase_cost===undefined||b.purchase_cost===null?null:Number(b.purchase_cost),b.availability||null,b.offer_id,id]
+          );
+          if(!offerUpdate.rowCount)return json(res,404,{error:'Пропозицію цього постачальника не знайдено для товару.'});
+          if (b.markup_type!==undefined && b.markup_value!==undefined) {
+            await pool.query("update products set characteristics=coalesce(characteristics,'{}'::jsonb)||jsonb_build_object('vitrano_markup',coalesce(characteristics->'vitrano_markup','{}'::jsonb)||jsonb_build_object($1::text,jsonb_build_object('type',$2::text,'value',$3::numeric))),updated_at=now() where id=$4",
+              [b.offer_id,b.markup_type,Number(b.markup_value),id]);
+          }
+        }
+        if (b.warehouse_names !== undefined) {
+          const wanted = [...new Set(Array.isArray(b.warehouse_names) ? b.warehouse_names : [])];
+          if (!wanted.length || wanted.some(n => !/^Склад \d+$/.test(n))) return json(res,400,{error:'Оберіть щонайменше один склад.'});
+          const current = await pool.query(`select o.id,o.supplier_id,o.retail_price,o.purchase_cost,o.availability,o.is_active,s.name as supplier_name
+            from supplier_offers o join suppliers s on s.id=o.supplier_id where o.product_id=$1`,[id]);
+          const template = current.rows.find(o=>o.is_active) || current.rows[0];
+          if (!template) return json(res,400,{error:'Немає ціни для створення пропозиції на новому складі. Спочатку задайте ціну товару.'});
+          for (const warehouse of wanted) {
+            let supplier = await pool.query('select id from suppliers where name=$1 limit 1',[warehouse]);
+            if (!supplier.rowCount) supplier = await pool.query('insert into suppliers(name,is_active) values($1,true) returning id',[warehouse]);
+            const exists = current.rows.find(o=>o.supplier_name===warehouse);
+            if (exists) {
+              await pool.query('update supplier_offers set is_active=true,updated_at=now() where id=$1',[exists.id]);
+            } else {
+              await pool.query(`insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active)
+                values($1,$2,$3,$4,$5,true)`,[id,supplier.rows[0].id,template.purchase_cost,template.retail_price,template.availability||'check']);
+            }
+          }
+          for (const offer of current.rows) {
+            if (/^Склад \d+$/.test(offer.supplier_name) && !wanted.includes(offer.supplier_name)) {
+              await pool.query('update supplier_offers set is_active=false,updated_at=now() where id=$1',[offer.id]);
+            }
+          }
+        }
+        await pool.query('insert into audit_log(action,entity_type,entity_id) values($1,$2,$3)',['product.update','product',id]);
+        return json(res,200,{message:'Зміни збережено.'});
+      }
+      if(req.method==='DELETE'&&productMatch){const id=productMatch[1];const client=await pool.connect();try{await client.query('BEGIN');const found=await client.query('select id,name from products where id=$1 for update',[id]);if(!found.rows.length){await client.query('ROLLBACK');return json(res,404,{error:'Товар не найден.'})}const linked=await client.query('select count(*)::int as count from order_items where product_id=$1',[id]);if(linked.rows[0].count>0){await client.query('ROLLBACK');return json(res,409,{error:'Товар уже есть в заказах. Вместо удаления скройте его от покупателей.'})}await client.query('delete from supplier_offers where product_id=$1',[id]);await client.query('delete from products where id=$1',[id]);await client.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)',['product.delete','product',id,JSON.stringify({name:found.rows[0].name})]);await client.query('COMMIT');return json(res,200,{message:'Товар удалён.'})}catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}}
+      const orderMatch=url.pathname.match(/^\/api\/admin\/orders\/([0-9a-f-]{36})$/i);
+      if(req.method==='PATCH'&&orderMatch){
+        const b=await readBody(req), allowed=['new','checking','confirmed','sent_to_supplier','shipped','delivered','cancelled','returned'];
+        if(!allowed.includes(b.status))return json(res,400,{error:'Некоректний статус замовлення.'});
+        const delivery=b.status==='shipped'?'shipped':b.status==='delivered'?'delivered':b.status==='returned'?'returned':b.status==='cancelled'?'not_shipped':null;
+        await pool.query('update orders set status=$1,ttn=coalesce($2,ttn),delivery_status=coalesce($3,delivery_status),updated_at=now() where id=$4',
+          [b.status,b.ttn?safeString(b.ttn,80):null,delivery,orderMatch[1]]);
+        await pool.query('insert into audit_log(action,entity_type,entity_id,details) values($1,$2,$3,$4)',['order.update','order',orderMatch[1],JSON.stringify({status:b.status,ttn:b.ttn||null})]);
+        return json(res,200,{message:'Замовлення оновлено.'});
+      }
+      if(req.method==='GET'&&url.pathname==='/api/admin/finance'){
+        const {rows}=await pool.query(`select
+          count(distinct o.id) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення'))::int as orders_count,
+          coalesce(sum((i.unit_price-coalesce(i.supplier_cost_snapshot,0))*i.quantity)
+            filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as daily_profit,
+          count(*) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')
+            and exists(select 1 from order_items ix where ix.order_id=o.id and ix.supplier_cost_snapshot is null))::int as orders_missing_cost
+          from orders o left join order_items i on i.order_id=o.id
+          where (o.created_at at time zone 'Europe/Kyiv')::date=(now() at time zone 'Europe/Kyiv')::date`);
+        return json(res,200,{finance:rows[0],note:'Прибуток розраховується за ціною продажу мінус зафіксована собівартість кожної позиції. Якщо собівартість не була збережена в замовленні, розрахунок може бути завищеним.'});
+      }
+      return json(res,404,{error:'Адмін-маршрут не знайдено.'});
+    }
+    return json(res,404,{error:'Маршрут не знайдено'});
+  } catch (error) {
+    const status=Number(error.status)||500;
+    if(status>=500) console.error('API error:',error.message);
+    return json(res,status,{error:status===503?'Базу даних ще не підключено.':status>=500?'Помилка сервера. Спробуйте пізніше.':error.message});
+  }
+}
+http.createServer((req,res)=>{handle(req,res);}).listen(PORT,'0.0.0.0',()=>{ console.log(`VITRANO API listening on ${PORT}`); if(process.env.SIGA_IMPORT_ON_START==='true'){ importSigaCatalog().then(result=>console.log('SIGA_IMPORT_RESULT '+JSON.stringify(result))).catch(error=>console.error('SIGA_IMPORT_FAILED '+error.message)); } });
+ order by name");
+        return json(res,200,{warehouses:rows});
       }
       if (req.method === 'POST' && url.pathname === '/api/admin/products') {
         const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), mode=safeString(b.supplier_mode,40);
