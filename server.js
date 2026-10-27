@@ -439,6 +439,12 @@ async function handle(req, res) {
       finally { client.release(); }
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/warehouses') {
+      requireDb();
+      const {rows}=await pool.query("select id,name,is_active,coalesce(min_order_items,case when name='Склад 1' then 3 when name='Склад 2' then 2 when name='Склад 3' then 3 else 1 end) as min_order_items from suppliers where is_active=true and name like 'Склад %' order by name");
+      return json(res,200,{warehouses:rows});
+    }
+
     if (url.pathname.startsWith('/api/admin/')) {
       requireDb();
       const configured = process.env.ADMIN_API_TOKEN || '';
@@ -580,8 +586,6 @@ async function handle(req, res) {
         const {rows}=await pool.query('select id,name,contact_name,phone,messenger,is_active,notes,min_order_items,created_at from suppliers order by created_at desc');
         return json(res,200,{suppliers:rows});
       }
-      if (req.method === 'GET' && url.pathname === '/api/warehouses') {
-        const {rows}=await pool.query("select id,name,is_active,coalesce(min_order_items,case when name='Склад 1' then 3 when name='Склад 2' then 2 when name='Склад 3' then 3 else 1 end) as min_order_items from suppliers where is_active=true and name ~ '^Склад [0-9]+
       if (req.method === 'POST' && url.pathname === '/api/admin/products') {
         const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), mode=safeString(b.supplier_mode,40);
         const price1=b.price_1==null||b.price_1===''?null:Number(b.price_1), price2=b.price_2==null||b.price_2===''?null:Number(b.price_2), cost1=b.purchase_cost_1===''||b.purchase_cost_1==null?null:Number(b.purchase_cost_1), cost2=b.purchase_cost_2===''||b.purchase_cost_2==null?null:Number(b.purchase_cost_2), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
