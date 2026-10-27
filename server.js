@@ -568,13 +568,16 @@ async function handle(req, res) {
       if (req.method === 'POST' && url.pathname === '/api/admin/suppliers/create') {
         const b=await readBody(req), name=safeString(b.name,100), min=Math.floor(Number(b.min_order_items));
         if(!/^Склад \d+$/.test(name)||!Number.isInteger(min)||min<1||min>100) return json(res,400,{error:'Вкажіть назву складу формату «Склад 3» та мінімум від 1 до 100 товарів.'});
-        const result=await pool.query('insert into suppliers(name,is_active,min_order_items) values($1,false,$2) on conflict(name) do update set min_order_items=excluded.min_order_items returning id,name,is_active,min_order_items',[name,min]);
+        let existing=await pool.query('select id from suppliers where name=$1 order by created_at limit 1',[name]);
+        let result;
+        if(existing.rowCount) result=await pool.query('update suppliers set min_order_items=$1,updated_at=now() where id=$2 returning id,name,is_active,min_order_items',[min,existing.rows[0].id]);
+        else result=await pool.query('insert into suppliers(name,is_active,min_order_items) values($1,false,$2) returning id,name,is_active,min_order_items',[name,min]);
         return json(res,200,{supplier:result.rows[0],message:'Налаштування складу збережено. Увімкніть його, коли асортимент буде готовий.'});
       }
       if (req.method === 'POST' && url.pathname === '/api/admin/suppliers/offers') {
         const b=await readBody(req), productId=safeString(b.product_id,50), name=safeString(b.warehouse_name,100), price=Number(b.retail_price), cost=b.purchase_cost==null||b.purchase_cost===''?null:Number(b.purchase_cost), availability=['available','check','unavailable'].includes(b.availability)?b.availability:'check';
         if(!/^Склад \d+$/.test(name)||!productId||!Number.isFinite(price)||price<=0||(cost!==null&&(!Number.isFinite(cost)||cost<0))) return json(res,400,{error:'Перевірте склад, товар, ціну продажу та собівартість.'});
-        const supplier=await pool.query('select id,name from suppliers where name=$1',[name]);
+        const supplier=await pool.query('select id,name from suppliers where name=$1 order by created_at limit 1',[name]);
         if(!supplier.rowCount) return json(res,404,{error:'Спочатку створіть склад.'});
         const product=await pool.query('select id,name from products where id=$1',[productId]);
         if(!product.rowCount) return json(res,404,{error:'Існуючий товар не знайдено.'});
