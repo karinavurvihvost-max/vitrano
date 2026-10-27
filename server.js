@@ -545,6 +545,13 @@ async function handle(req, res) {
         const {rows}=await pool.query(`select o.*,s.name as supplier_name,coalesce((select json_agg(json_build_object('name',i.product_name_snapshot,'quantity',i.quantity,'unit_price',i.unit_price,'line_total',i.line_total)) from order_items i where i.order_id=o.id),'[]'::json) as items from orders o left join suppliers s on s.id=o.supplier_id order by o.created_at desc limit 300`);
         return json(res,200,{orders:rows});
       }
+      if (req.method === 'POST' && url.pathname === '/api/admin/suppliers/visibility') {
+        const b=await readBody(req), name=safeString(b.name,100), visible=b.visible===true;
+        if(!['Склад 1','Склад 2'].includes(name)) return json(res,400,{error:'Можна змінювати видимість лише стандартних складів.'});
+        const result=await pool.query('update suppliers set is_active=$1 where name=$2 returning id,name,is_active',[visible,name]);
+        if(!result.rowCount) return json(res,404,{error:'Склад не знайдено в налаштуваннях.'});
+        return json(res,200,{supplier:result.rows[0],message:visible?'Склад знову показується покупцям.':'Склад прихований от покупателей.'});
+      }
       if (req.method === 'GET' && url.pathname === '/api/admin/suppliers') {
         const {rows}=await pool.query('select id,name,contact_name,phone,messenger,is_active,notes,created_at from suppliers order by created_at desc');
         return json(res,200,{suppliers:rows});
