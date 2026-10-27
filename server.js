@@ -187,7 +187,7 @@ async function importSigaCatalog() {
 const passwordHash = password => scryptSync(password, 'vitrano-customer-v1', 64).toString('hex');
 async function ensureWarehouseSchema() {
   await pool.query('alter table suppliers add column if not exists min_order_items integer');
-  await pool.query("update suppliers set min_order_items=case when name='Склад 1' then 3 when name='Склад 2' then 2 when name='Склад 3' then 3 else 1 end where min_order_items is null or (name in ('Склад 1','Склад 2','Склад 3') and min_order_items <> case when name='Склад 1' then 3 when name='Склад 2' then 2 else 3 end)");
+  await pool.query("update suppliers set min_order_items=case when name='Склад 1' then 3 when name='Склад 2' then 2 when name='Склад 3' then 3 else 1 end where min_order_items is null");
 }
 
 async function ensureCustomerAuthSchema() {
