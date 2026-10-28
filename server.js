@@ -330,7 +330,7 @@ async function handle(req, res) {
       if (req.method === 'POST' && url.pathname === '/api/customer/logout') { const customer=await customerFromRequest(req); if(customer) await pool.query('update customers set session_token_hash=null,session_expires_at=null where id=$1',[customer.id]); return json(res,200,{ok:true}); }
       if (req.method === 'GET' && url.pathname === '/api/customer/me') {
         const customer=await customerFromRequest(req); if(!customer)return json(res,401,{error:'Увійдіть до кабінету.'});
-        const {rows}=await pool.query('select o.id,o.order_number,o.status,o.payment_status,o.delivery_status,o.subtotal,o.created_at,o.carrier,o.region,o.city,o.branch,o.ttn,coalesce((select json_agg(json_build_object(\'name\',i.product_name_snapshot,\'quantity\',i.quantity,\'unit_price\',i.unit_price,\'line_total\',i.line_total)) from order_items i where i.order_id=o.id),\'[]\'::json) as items from orders o where o.customer_id=$1 order by o.created_at desc limit 50',[customer.id]);
+        const {rows}=await pool.query('select o.id,o.order_number,o.status,o.payment_status,o.delivery_status,o.subtotal,o.created_at,o.carrier,o.region,o.city,o.branch,o.ttn,s.name as warehouse_name,coalesce((select json_agg(json_build_object(\'name\',i.product_name_snapshot,\'product_id\',i.product_id,\'offer_id\',i.offer_id,\'quantity\',i.quantity,\'unit_price\',i.unit_price,\'line_total\',i.line_total)) from order_items i where i.order_id=o.id),\'[]\'::json) as items from orders o left join suppliers s on s.id=o.supplier_id where o.customer_id=$1 order by o.created_at desc limit 50',[customer.id]);
         return json(res,200,{customer,orders:rows});
       }
       if (req.method === 'PATCH' && url.pathname === '/api/customer/profile') {
