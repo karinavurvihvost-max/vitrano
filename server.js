@@ -342,6 +342,32 @@ async function handle(req, res) {
       }
       return json(res,404,{error:'Маршрут кабінету не знайдено.'});
     }
+    if (req.method === 'POST' && url.pathname === '/api/analytics/install') {
+      requireDb();
+      if (rateLimited(req)) return json(res,429,{error:'Спробуйте пізніше.'});
+      const b=await readBody(req);
+      const installId=String(b.installation_id||'');
+      const platform=safeString(b.platform||'other',30);
+      const source=safeString(b.source||'standalone',30);
+      if(!/^[a-f0-9-]{36}$/i.test(installId)) return json(res,400,{error:'Некоректний ідентифікатор встановлення.'});
+      if(!['android','ios','desktop','other'].includes(platform)) return json(res,400,{error:'Некоректна платформа.'});
+      if(!['appinstalled','standalone'].includes(source)) return json(res,400,{error:'Некоректне джерело.'});
+      await pool.query(`create table if not exists pwa_installs (
+        installation_id text primary key,
+        platform text not null,
+        first_seen timestamptz not null default now(),
+        last_seen timestamptz not null default now(),
+        source text not null
+      )`);
+      await pool.query(`insert into pwa_installs(installation_id,platform,source)
+        values($1,$2,$3)
+        on conflict(installation_id) do update set
+          last_seen=now(),
+          platform=excluded.platform,
+          source=case when pwa_installs.source='appinstalled' then pwa_installs.source else excluded.source end`,
+        [installId,platform,source]);
+      return json(res,200,{ok:true});
+    }
     if (req.method === 'POST' && url.pathname === '/api/analytics/visit') {
       requireDb();
       if (rateLimited(req)) return json(res,429,{error:'Спробуйте пізніше.'});
@@ -473,6 +499,11 @@ async function handle(req, res) {
         if ((req.headers.authorization || '') !== 'Bearer ' + configured) return json(res,401,{error:'Потрібна авторизація адміністратора.'});
       }
       if(url.pathname==='/api/admin/analytics'&&req.method==='GET'){
+        await pool.query(`create table if not exists pwa_installs (
+          installation_id text primary key, platform text not null,
+          first_seen timestamptz not null default now(), last_seen timestamptz not null default now(), source text not null
+        )`);
+
         await pool.query(`create table if not exists site_analytics_events (
           id bigserial primary key, visitor_hash text not null, event_type text not null check(event_type in ('visit','registration')),
           page_path text not null default '/', created_at timestamptz not null default now()
@@ -485,7 +516,13 @@ async function handle(req, res) {
             (select count(distinct visitor_hash)::int from site_analytics_events where event_type='visit' and created_at >= date_trunc('day',now() at time zone 'Europe/Kyiv') at time zone 'Europe/Kyiv') as visitors_today,
             (select count(*)::int from site_analytics_events where event_type='visit' and created_at >= now()-interval '7 days') as visits_7d,
             (select count(*)::int from site_analytics_events where event_type='registration' and created_at >= now()-interval '7 days') as registrations_7d,
-            (select count(*)::int from customers) as customer_accounts_total
+            (select count(*)::int from customers) as customer_accounts_total,
+            (select count(*)::int from pwa_installs) as installs_total,
+            (select count(*)::int from pwa_installs where first_seen >= date_trunc('day',now() at time zone 'Europe/Kyiv') at time zone 'Europe/Kyiv') as installs_today,
+            (select count(*)::int from pwa_installs where first_seen >= now()-interval '7 days') as installs_7d,
+            (select count(*)::int from pwa_installs where platform='android') as installs_android,
+            (select count(*)::int from pwa_installs where platform='ios') as installs_ios,
+            (select count(*)::int from pwa_installs where platform in ('desktop','other')) as installs_other
         `);
         const daily=await pool.query(`select to_char(day,'DD.MM') as day,
           coalesce(v.visitors,0)::int as visitors,coalesce(r.registrations,0)::int as registrations
