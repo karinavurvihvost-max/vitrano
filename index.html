@@ -530,6 +530,34 @@ img[loading="lazy"]{content-visibility:auto;}
 @media(prefers-reduced-motion:reduce){.skeleton-image:after,.skeleton-line:after,.skeleton-button:after{animation:none}}
 .product-image img,.mini-product-image img,.mini-photo img,.detail-photo img{background:linear-gradient(110deg,#edf4fc 8%,#f9fbff 18%,#edf4fc 33%);background-size:200% 100%;color:transparent}
 .product-image img:not([src]),.product-image img[src=""]{visibility:hidden}
+
+/* Compact product detail modal: prioritize product, price and warehouse choice */
+#detailcontent.modal{padding:14px 14px 18px;border-radius:22px}
+#detailcontent .modal-head{margin-bottom:4px}
+#detailcontent .detail-photo{width:min(100%,150px);height:132px;aspect-ratio:auto;max-height:132px;margin:6px auto 10px;border-radius:15px}
+#detailcontent .detail-photo img{width:100%;height:100%;object-fit:contain;padding:5px}
+#detailcontent h2{font-size:21px!important;line-height:1.2;margin:0 0 4px!important}
+#detailcontent>p.muted{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:1.4;margin:3px 0 8px}
+#detailcontent .detail-summary{padding:8px 10px;margin:7px 0;border-radius:13px}
+#detailcontent .detail-summary .muted{font-size:12px;line-height:1.25}
+#detailcontent .detail-summary strong{font-size:21px;line-height:1.2;display:block;margin-top:3px}
+#detailcontent .compare-heading{font-size:15px;margin:8px 0 5px}
+#detailcontent .supplier-option{padding:8px 10px;min-height:0;margin:4px 0;border-radius:12px;gap:8px}
+#detailcontent .supplier-option strong{font-size:15px}
+#detailcontent .supplier-option-info{gap:2px}
+#detailcontent .supplier-option-info b{font-size:14px}
+#detailcontent .supplier-option-info .muted{font-size:11px}
+#detailcontent .compare-note{display:none}
+#detailcontent .review-panel{margin-top:9px}
+@media(max-width:620px){
+ #detailcontent.modal{padding:12px 12px calc(14px + env(safe-area-inset-bottom));max-height:calc(100dvh - 82px);border-radius:22px 22px 0 0}
+ #detailcontent .detail-photo{width:136px;height:120px;max-height:120px;margin:4px auto 8px}
+ #detailcontent h2{font-size:20px!important}
+ #detailcontent .detail-summary strong{font-size:20px}
+ #detailcontent .supplier-option{padding:7px 9px;margin:3px 0}
+ #detailcontent .compare-heading{margin:7px 0 4px}
+}
+
 </style></head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="header-chat-button" type="button" onclick="document.getElementById(&quot;vitrano-chat-launch&quot;).click()">💬 Менеджер</button><div class="install-actions"><button class="ios-install" id="installapp" hidden onclick="installVitrano()"><span class="ios-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="white" stroke-width="2.8"/><path d="M11 26h7l7-11m-7 11-6 10m16-22 10 22m-10-22 7 11h6M18 26h12" fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-copy"><b>Встановити</b><small>Додаток VITRANO</small></span><span class="ios-install-cloud" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M14 31h-2a8 8 0 0 1 1-16 12 12 0 0 1 23 4 7 7 0 0 1 1 14h-7M24 24v17m-7-7 7 7 7-7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-chevron" aria-hidden="true">›</span></button><button class="play-install" id="installapp-play" type="button" onclick="installVitrano()"><span class="play-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><path fill="#00D6A3" d="M7 4.8v38.4L27.4 24z"/><path fill="#4285F4" d="M7 4.8 31.8 18.9 27.4 24z"/><path fill="#FBBC04" d="M27.4 24 31.8 29.1 7 43.2z"/><path fill="#EA4335" d="M31.8 18.9 42 24.7c1.9 1.1 1.9 2.7 0 3.8l-10.2 5.8-4.4-10.3z"/></svg></span><span class="play-install-copy"><b>Google Play</b><small>Додаток VITRANO</small></span><span class="play-install-download" aria-hidden="true">↓</span><span class="ios-install-chevron" aria-hidden="true">›</span></button></div></div></header>
 <main id="storefront"><div class="hero-carousel" id="heroCarousel" aria-label="Головні банери"><section class="hero"><div class="hero-copy"><div class="eyebrow">VITRANO · ТВІЙ СВІТ ПОКУПОК</div><h1>Краще для дому та щоденного життя</h1><p>Знаходь потрібні товари, порівнюй пропозиції та обирай зручно.</p><button class="primary" onclick="go('catalog')">Дивитися каталог　→</button></div><div class="hero-art" aria-hidden="true"></div></section></div>
