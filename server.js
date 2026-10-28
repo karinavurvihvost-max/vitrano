@@ -196,16 +196,24 @@ async function ensureCustomerAddressSchema() {
     id uuid primary key default gen_random_uuid(),
     customer_id uuid not null references customers(id) on delete cascade,
     label text not null default 'Адреса доставки',
-    full_name text not null,
-    phone text not null,
+    full_name text not null default '',
+    phone text not null default '',
     carrier text not null check (carrier in ('nova_poshta','ukrposhta')),
-    region text not null,
+    region text not null default '',
     city text not null,
     branch text not null,
     is_default boolean not null default false,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   )`);
+  // Upgrade the earlier address-book schema in place without deleting saved rows.
+  await pool.query("alter table customer_addresses add column if not exists label text not null default 'Адреса доставки'");
+  await pool.query("alter table customer_addresses add column if not exists full_name text not null default ''");
+  await pool.query("alter table customer_addresses add column if not exists region text not null default ''");
+  await pool.query("alter table customer_addresses add column if not exists is_default boolean not null default false");
+  await pool.query("alter table customer_addresses add column if not exists updated_at timestamptz not null default now()");
+  await pool.query("alter table customer_addresses add column if not exists recipient_name text");
+  await pool.query("update customer_addresses set full_name=recipient_name where (full_name is null or full_name='') and recipient_name is not null and recipient_name<>''");
   await pool.query('create index if not exists customer_addresses_customer_idx on customer_addresses(customer_id, created_at desc)');
 }
 async function ensureCustomerAuthSchema() {
