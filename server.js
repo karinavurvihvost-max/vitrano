@@ -418,6 +418,24 @@ async function handle(req, res) {
         const byId = new Map(offers.map(o=>[o.id,o]));
         const subtotal = ids.reduce((sum,id)=>sum+Number(byId.get(id).effective_price)*merged.get(id),0);
         if (!Number.isFinite(subtotal)||subtotal<=0) { await client.query('ROLLBACK'); return json(res,400,{error:'Некоректна сума замовлення.'}); }
+        // Prevent accidental repeat orders: same phone, warehouse and exact basket within 24 hours.
+        const basketFingerprint = JSON.stringify(ids.map(id=>({offer_id:id,quantity:merged.get(id)})).sort((a,b)=>a.offer_id.localeCompare(b.offer_id)));
+        const {rows: duplicateOrders} = await client.query(`
+          select o.id,o.order_number,o.created_at
+          from orders o
+          where regexp_replace(coalesce(o.customer_phone,''),'\\D','','g')=regexp_replace($1,'\\D','','g')
+            and o.supplier_id=$2
+            and o.created_at > now()-interval '24 hours'
+            and lower(trim(coalesce(o.status,''))) not in ('cancelled','returned','скасовано','повернення','відмінено')
+            and (select coalesce(jsonb_agg(jsonb_build_object('offer_id',i.offer_id::text,'quantity',i.quantity) order by i.offer_id::text),'[]'::jsonb)
+                 from order_items i where i.order_id=o.id)=$3::jsonb
+          order by o.created_at desc limit 1
+        `,[customer_phone,offers[0].supplier_id,basketFingerprint]);
+        if(duplicateOrders.length){
+          const previous=duplicateOrders[0];
+          await client.query('ROLLBACK');
+          return json(res,409,{error:'Схоже, ви вже оформили таке саме замовлення №'+previous.order_number+' протягом останніх 24 годин. Щоб уникнути дублювання, нове замовлення не створено. Якщо вам потрібне ще одне, зв’яжіться з магазином.' ,duplicate_order_number:previous.order_number});
+        }
         const { rows: customerRows } = await client.query(`
           insert into customers(full_name,phone) values($1,$2)
           on conflict(phone) do update set full_name=excluded.full_name,updated_at=now()
