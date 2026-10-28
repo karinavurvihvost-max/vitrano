@@ -191,6 +191,23 @@ async function ensureWarehouseSchema() {
   await pool.query("update suppliers set min_order_items=case when name='Склад 1' then 3 when name='Склад 2' then 2 when name='Склад 3' then 3 else 1 end where min_order_items is null");
 }
 
+async function ensureCustomerAddressSchema() {
+  await pool.query(`create table if not exists customer_addresses (
+    id uuid primary key default gen_random_uuid(),
+    customer_id uuid not null references customers(id) on delete cascade,
+    label text not null default 'Адреса доставки',
+    full_name text not null,
+    phone text not null,
+    carrier text not null check (carrier in ('nova_poshta','ukrposhta')),
+    region text not null,
+    city text not null,
+    branch text not null,
+    is_default boolean not null default false,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  )`);
+  await pool.query('create index if not exists customer_addresses_customer_idx on customer_addresses(customer_id, created_at desc)');
+}
 async function ensureCustomerAuthSchema() {
   await pool.query('alter table customers add column if not exists password_hash text');
   await pool.query('alter table customers add column if not exists session_token_hash text');
@@ -332,6 +349,37 @@ async function handle(req, res) {
         const customer=await customerFromRequest(req); if(!customer)return json(res,401,{error:'Увійдіть до кабінету.'});
         const {rows}=await pool.query('select o.id,o.order_number,o.status,o.payment_status,o.delivery_status,o.subtotal,o.created_at,o.carrier,o.region,o.city,o.branch,o.ttn,s.name as warehouse_name,coalesce((select json_agg(json_build_object(\'name\',i.product_name_snapshot,\'product_id\',i.product_id,\'offer_id\',i.offer_id,\'quantity\',i.quantity,\'unit_price\',i.unit_price,\'line_total\',i.line_total)) from order_items i where i.order_id=o.id),\'[]\'::json) as items from orders o left join suppliers s on s.id=o.supplier_id where o.customer_id=$1 order by o.created_at desc limit 50',[customer.id]);
         return json(res,200,{customer,orders:rows});
+      }
+      if (url.pathname.startsWith('/api/customer/addresses')) {
+        const customer=await customerFromRequest(req);
+        if(!customer)return json(res,401,{error:'Увійдіть до кабінету.'});
+        await ensureCustomerAddressSchema();
+        const addressMatch=url.pathname.match(/^\/api\/customer\/addresses(?:\/([0-9a-f-]{36}))?$/i);
+        if(!addressMatch)return json(res,404,{error:'Адресу не знайдено.'});
+        const addressId=addressMatch[1]||null;
+        if(req.method==='GET'){
+          const {rows}=await pool.query('select id,label,full_name,phone,carrier,region,city,branch,is_default,created_at,updated_at from customer_addresses where customer_id=$1 order by is_default desc,updated_at desc',[customer.id]);
+          return json(res,200,{addresses:rows});
+        }
+        if(req.method==='POST'||req.method==='PATCH'){
+          const b=await readBody(req),label=safeString(b.label||'Адреса доставки',60),full_name=safeString(b.full_name,120),phone=safeString(b.phone,30),carrier=b.carrier,region=safeString(b.region,100),city=safeString(b.city,100),branch=safeString(b.branch,160),makeDefault=b.is_default===true;
+          if(label.length<2||full_name.length<3||!validPhone(phone)||!['nova_poshta','ukrposhta'].includes(carrier)||region.length<2||city.length<2||branch.length<1)return json(res,400,{error:'Перевірте назву адреси, отримувача, телефон, службу доставки, область, місто та відділення.'});
+          if(req.method==='PATCH'&&!addressId)return json(res,400,{error:'Не вказано адресу для оновлення.'});
+          const client=await pool.connect();
+          try{
+            await client.query('BEGIN');
+            if(addressId){const exists=await client.query('select id from customer_addresses where id=$1 and customer_id=$2 for update',[addressId,customer.id]);if(!exists.rows.length){await client.query('ROLLBACK');return json(res,404,{error:'Адресу не знайдено.'})}}
+            if(makeDefault||req.method==='POST'){const count=await client.query('select count(*)::int as n from customer_addresses where customer_id=$1',[customer.id]);if(makeDefault||Number(count.rows[0].n)===0)await client.query('update customer_addresses set is_default=false,updated_at=now() where customer_id=$1',[customer.id])}
+            let result;
+            if(req.method==='POST')result=await client.query('insert into customer_addresses(customer_id,label,full_name,phone,carrier,region,city,branch,is_default) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id,label,full_name,phone,carrier,region,city,branch,is_default,created_at,updated_at',[customer.id,label,full_name,phone,carrier,region,city,branch,makeDefault||Number((await client.query('select count(*)::int as n from customer_addresses where customer_id=$1',[customer.id])).rows[0].n)===0]);
+            else result=await client.query('update customer_addresses set label=$1,full_name=$2,phone=$3,carrier=$4,region=$5,city=$6,branch=$7,is_default=$8,updated_at=now() where id=$9 and customer_id=$10 returning id,label,full_name,phone,carrier,region,city,branch,is_default,created_at,updated_at',[label,full_name,phone,carrier,region,city,branch,makeDefault,addressId,customer.id]);
+            await client.query('COMMIT');return json(res,req.method==='POST'?201:200,{address:result.rows[0],message:'Адресу збережено.'});
+          }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
+        }
+        if(req.method==='DELETE'&&addressId){
+          const client=await pool.connect();try{await client.query('BEGIN');const {rows}=await client.query('delete from customer_addresses where id=$1 and customer_id=$2 returning id,is_default',[addressId,customer.id]);if(!rows.length){await client.query('ROLLBACK');return json(res,404,{error:'Адресу не знайдено.'})}if(rows[0].is_default){const next=await client.query('select id from customer_addresses where customer_id=$1 order by updated_at desc limit 1',[customer.id]);if(next.rows.length)await client.query('update customer_addresses set is_default=true,updated_at=now() where id=$1',[next.rows[0].id])}await client.query('COMMIT');return json(res,200,{ok:true,message:'Адресу видалено.'})}catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
+        }
+        return json(res,405,{error:'Метод не підтримується.'});
       }
       if (req.method === 'PATCH' && url.pathname === '/api/customer/profile') {
         const customer=await customerFromRequest(req);
