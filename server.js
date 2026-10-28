@@ -648,9 +648,20 @@ async function handle(req, res) {
           pool.query('select count(*)::int as count from products'),
           pool.query('select count(*)::int as count from orders'),
           pool.query('select count(*)::int as count from suppliers where is_active=true'),
-          pool.query(`select coalesce(sum((i.unit_price-coalesce(i.supplier_cost_snapshot,0))*i.quantity),0)::numeric(12,2) as revenue from orders o join order_items i on i.order_id=o.id where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')`)
+          pool.query(`select
+            coalesce(sum(i.unit_price*i.quantity),0)::numeric(12,2) as gross_sales,
+            coalesce(sum(coalesce(i.supplier_cost_snapshot,0)*i.quantity),0)::numeric(12,2) as recorded_cost,
+            coalesce(sum((i.unit_price-coalesce(i.supplier_cost_snapshot,0))*i.quantity),0)::numeric(12,2) as estimated_profit,
+            count(distinct o.id) filter(where exists(select 1 from order_items ix where ix.order_id=o.id and ix.supplier_cost_snapshot is null))::int as orders_missing_cost
+          from orders o join order_items i on i.order_id=o.id
+          where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення','відмінено')`)
         ]);
-        return json(res,200,{products:p.rows[0].count,orders:o.rows[0].count,suppliers:s.rows[0].count,revenue:fin.rows[0].revenue});
+        const f=fin.rows[0];
+        return json(res,200,{products:p.rows[0].count,orders:o.rows[0].count,suppliers:s.rows[0].count,
+          revenue:f.estimated_profit,profit:f.orders_missing_cost===0?f.estimated_profit:null,
+          estimated_profit:f.estimated_profit,gross_sales:f.gross_sales,recorded_cost:f.recorded_cost,
+          orders_missing_cost:f.orders_missing_cost,
+          note:f.orders_missing_cost?'Чистий прибуток не можна підтвердити: є замовлення без зафіксованої собівартості.':'Прибуток розраховано за зафіксованою собівартістю товарних позицій.'});
       }
       if(req.method==='GET'&&url.pathname==='/api/admin/reviews'){
         const {rows}=await pool.query("select r.id,r.product_id,r.rating,r.body,r.status,r.admin_reply,r.created_at,p.name as product_name,coalesce(c.full_name,'Покупець') as customer_name from reviews r join products p on p.id=r.product_id left join customers c on c.id=r.customer_id order by case when r.status='pending' then 0 else 1 end,r.created_at desc limit 300");
@@ -801,15 +812,41 @@ async function handle(req, res) {
         return json(res,200,{message:'Замовлення оновлено.'});
       }
       if(req.method==='GET'&&url.pathname==='/api/admin/finance'){
-        const {rows}=await pool.query(`select
-          count(distinct o.id) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення'))::int as orders_count,
-          coalesce(sum((i.unit_price-coalesce(i.supplier_cost_snapshot,0))*i.quantity)
-            filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')),0)::numeric(12,2) as daily_profit,
-          count(*) filter(where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')
-            and exists(select 1 from order_items ix where ix.order_id=o.id and ix.supplier_cost_snapshot is null))::int as orders_missing_cost
-          from orders o left join order_items i on i.order_id=o.id
-          where (o.created_at at time zone 'Europe/Kyiv')::date=(now() at time zone 'Europe/Kyiv')::date`);
-        return json(res,200,{finance:rows[0],note:'Прибуток розраховується за ціною продажу мінус зафіксована собівартість кожної позиції. Якщо собівартість не була збережена в замовленні, розрахунок може бути завищеним.'});
+        const {rows}=await pool.query(`
+          with base as (
+            select o.id,o.created_at,o.status,i.unit_price,i.supplier_cost_snapshot,i.quantity,
+              (lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення','відмінено')) as included
+            from orders o join order_items i on i.order_id=o.id
+          ), periods as (
+            select 'today'::text as period, (now() at time zone 'Europe/Kyiv')::date as from_date
+            union all select 'week', date_trunc('week',now() at time zone 'Europe/Kyiv')::date
+            union all select 'month', date_trunc('month',now() at time zone 'Europe/Kyiv')::date
+          )
+          select p.period,
+            count(distinct b.id) filter(where b.included)::int as orders_count,
+            coalesce(sum(b.unit_price*b.quantity) filter(where b.included),0)::numeric(12,2) as gross_sales,
+            coalesce(sum(b.supplier_cost_snapshot*b.quantity) filter(where b.included and b.supplier_cost_snapshot is not null),0)::numeric(12,2) as recorded_cost,
+            coalesce(sum((b.unit_price-coalesce(b.supplier_cost_snapshot,0))*b.quantity) filter(where b.included),0)::numeric(12,2) as estimated_profit,
+            count(distinct b.id) filter(where b.included and b.supplier_cost_snapshot is null)::int as orders_missing_cost
+          from periods p left join base b
+            on (b.created_at at time zone 'Europe/Kyiv')::date >= p.from_date
+            and (p.period<>'today' or (b.created_at at time zone 'Europe/Kyiv')::date=(now() at time zone 'Europe/Kyiv')::date)
+          group by p.period,p.from_date
+          order by case p.period when 'today' then 1 when 'week' then 2 else 3 end
+        `);
+        const metrics={};
+        for(const row of rows){
+          const missing=Number(row.orders_missing_cost)||0;
+          metrics[row.period]={orders_count:Number(row.orders_count)||0,gross_sales:row.gross_sales,
+            recorded_cost:row.recorded_cost,estimated_profit:row.estimated_profit,
+            profit:missing===0?row.estimated_profit:null,orders_missing_cost:missing,
+            profit_is_complete:missing===0};
+        }
+        const activeOffers=await pool.query(`select count(*)::int as count from supplier_offers o join suppliers s on s.id=o.supplier_id
+          where o.is_active=true and s.is_active=true and o.availability='available' and o.purchase_cost is null`);
+        return json(res,200,{finance:metrics.today||{orders_count:0,gross_sales:'0.00',recorded_cost:'0.00',estimated_profit:'0.00',profit:'0.00',orders_missing_cost:0,profit_is_complete:true},
+          periods:metrics,active_offers_missing_cost:activeOffers.rows[0].count,
+          note:'Profit is shown only when all included order items have a saved purchase cost. Estimated profit treats missing cost as zero and may be overstated.'});
       }
       return json(res,404,{error:'Адмін-маршрут не знайдено.'});
     }
