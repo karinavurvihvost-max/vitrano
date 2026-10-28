@@ -6,7 +6,7 @@ const { Pool } = pg;
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://vitrano-storefront.onrender.com';
-const ALLOWED_ORIGINS = new Set([ALLOWED_ORIGIN, 'https://vitrano-storefront.onrender.com']);
+const ALLOWED_ORIGINS = new Set([ALLOWED_ORIGIN, 'https://vitrano-storefront.onrender.com', 'https://front.onrender.com']);
 const OPEN_ADMIN_ACCESS = process.env.OPEN_ADMIN_ACCESS === 'true';
 const pool = DATABASE_URL ? new Pool({
   connectionString: DATABASE_URL,
@@ -21,7 +21,7 @@ const json = (res, status, body) => {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
-    'access-control-allow-origin': (req.headers.origin && ALLOWED_ORIGINS.has(req.headers.origin)) ? req.headers.origin : ALLOWED_ORIGIN,
+    'access-control-allow-origin': res.__corsOrigin || ALLOWED_ORIGIN,
     'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'access-control-allow-headers': 'content-type,authorization',
     'vary': 'Origin'
@@ -210,6 +210,7 @@ async function handle(req, res) {
   const origin = req.headers.origin;
   if (origin && !ALLOWED_ORIGINS.has(origin)) return json(res, 403, { error: 'Origin is not allowed' });
   const corsOrigin = origin && ALLOWED_ORIGINS.has(origin) ? origin : ALLOWED_ORIGIN;
+  res.__corsOrigin = corsOrigin;
   if (req.method === 'OPTIONS') {
     res.writeHead(204, { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'content-type,authorization', 'access-control-max-age': '600', vary: 'Origin' });
     return res.end();
