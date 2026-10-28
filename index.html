@@ -718,7 +718,62 @@ img[loading="lazy"]{content-visibility:auto;}
 @keyframes vitranoFadeIn{from{opacity:0}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.vitrano-thanks-overlay,.vitrano-confetti{animation:none}.vitrano-confetti{display:none}}
 
-</style></head><body>
+</style>
+<style>
+/* VITRANO customer account */
+#sectionbody .va-hero{position:relative;overflow:hidden;border-radius:24px;padding:22px;background:linear-gradient(135deg,#0b63e5,#318cff);color:#fff;margin-bottom:14px;box-shadow:0 12px 30px #1469e51c}
+#sectionbody .va-hero:after{content:"";position:absolute;width:150px;height:150px;border-radius:50%;right:-45px;top:-55px;background:#ffffff18;box-shadow:0 0 0 22px #ffffff0c}
+#sectionbody .va-eyebrow{font-size:12px;letter-spacing:1.2px;font-weight:800;text-transform:uppercase;opacity:.8}
+#sectionbody .va-hero h2{font-size:25px;line-height:1.2;margin:8px 0 6px;color:#fff}
+#sectionbody .va-hero p{margin:0;color:#e7f1ff}
+#sectionbody .va-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}
+#sectionbody .va-stat{padding:13px 10px;border:1px solid #e1eaf6;border-radius:17px;background:#fff;min-width:0}
+#sectionbody .va-stat b{display:block;font-size:21px;color:#173b65;line-height:1.2;overflow-wrap:anywhere}
+#sectionbody .va-stat span{display:block;color:#75869a;font-size:12px;margin-top:5px}
+#sectionbody .va-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
+#sectionbody .va-shortcut{border:1px solid #e0e9f5;background:#fff;border-radius:16px;padding:13px;text-align:left;color:#203b5b;font-weight:750;display:flex;gap:10px;align-items:center;min-height:58px}
+#sectionbody .va-shortcut .va-ico{width:36px;height:36px;flex:0 0 36px;border-radius:12px;background:#eaf3ff;display:grid;place-items:center;font-size:19px}
+#sectionbody .va-card{border:1px solid #e1eaf5;border-radius:20px;background:#fff;padding:16px;margin:12px 0;box-shadow:0 5px 20px #183c6410}
+#sectionbody .va-cardhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+#sectionbody .va-cardhead h3{margin:0;font-size:19px}
+#sectionbody .va-muted{color:#77879a;font-size:13px}
+#sectionbody .va-field{display:grid;gap:6px;margin:10px 0;color:#526981;font-size:13px;font-weight:700}
+#sectionbody .va-field input{width:100%;box-sizing:border-box;border:1px solid #dce6f2;background:#fbfdff;border-radius:13px;padding:13px;font:inherit;font-size:15px;color:#18304d}
+#sectionbody .va-order{border:1px solid #e1eaf5;border-radius:18px;padding:14px;margin:11px 0;background:linear-gradient(160deg,#fff,#f9fbff)}
+#sectionbody .va-order-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+#sectionbody .va-order-no{font-size:17px;font-weight:850;color:#18385e}
+#sectionbody .va-order-total{font-size:19px;font-weight:850;color:#16845d;white-space:nowrap}
+#sectionbody .va-badge{display:inline-flex;align-items:center;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;background:#eaf2ff;color:#1764be}
+#sectionbody .va-warehouse{display:inline-flex;align-items:center;gap:6px;border-radius:10px;background:#eaf3ff;color:#145ca9;padding:7px 10px;font-weight:750;font-size:13px;margin:10px 0}
+#sectionbody .va-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:13px 0}
+#sectionbody .va-progress span{height:5px;border-radius:99px;background:#e4ebf4}
+#sectionbody .va-progress span.done{background:#2583f5}
+#sectionbody .va-order-items{border-top:1px solid #e7edf5;margin-top:11px;padding-top:8px}
+#sectionbody .va-order-item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;font-size:13px;color:#314a65}
+#sectionbody .va-order-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#sectionbody .va-order-actions button{flex:1;min-width:120px}
+#sectionbody .va-filter{display:flex;gap:7px;overflow:auto;padding:2px 0 8px}
+#sectionbody .va-filter button{border:1px solid #dce7f5;background:#fff;color:#4c6580;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:750;white-space:nowrap}
+#sectionbody .va-filter button.active{background:#126be8;color:#fff;border-color:#126be8}
+#sectionbody .va-empty{text-align:center;padding:24px 12px;color:#72849a}
+#sectionbody .va-empty .va-empty-icon{font-size:35px;margin-bottom:8px}
+@media(max-width:420px){#sectionbody .va-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#sectionbody .va-stat{padding:10px 7px}#sectionbody .va-stat b{font-size:18px}#sectionbody .va-shortcut{padding:10px;font-size:12px}#sectionbody .va-hero{padding:18px}}
+</style>
+<style>
+#sectionbody .va-address{border:1px solid #dfe9f5;border-radius:16px;padding:13px;margin:10px 0;background:#fbfdff}
+#sectionbody .va-address-main{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+#sectionbody .va-address-title{font-weight:800;color:#1d3c60}
+#sectionbody .va-address-default{display:inline-block;border-radius:999px;background:#e4f8ee;color:#17764e;font-size:11px;font-weight:800;padding:5px 8px;margin-top:6px}
+#sectionbody .va-address-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+#sectionbody .va-address-actions button{font-size:12px;padding:9px 11px}
+#sectionbody .va-address-form{border:1px dashed #cdddf0;background:#f7fbff;border-radius:16px;padding:13px;margin-top:12px}
+#sectionbody .va-address-form[hidden]{display:none}
+#sectionbody .va-address-form input,#sectionbody .va-address-form select{width:100%;box-sizing:border-box;border:1px solid #dce6f2;background:#fff;border-radius:12px;padding:12px;font:inherit;color:#18304d}
+#sectionbody .va-address-form label{display:grid;gap:5px;margin:9px 0;color:#526981;font-size:12px;font-weight:750}
+#checkout-saved-addresses{margin-bottom:12px}
+#checkout-saved-addresses[hidden]{display:none}
+</style>
+</head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="header-chat-button" type="button" onclick="document.getElementById(&quot;vitrano-chat-launch&quot;).click()">💬 Менеджер</button><div class="install-actions"><button class="ios-install" id="installapp" hidden onclick="installVitrano()"><span class="ios-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="white" stroke-width="2.8"/><path d="M11 26h7l7-11m-7 11-6 10m16-22 10 22m-10-22 7 11h6M18 26h12" fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-copy"><b>Встановити</b><small>Додаток VITRANO</small></span><span class="ios-install-cloud" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M14 31h-2a8 8 0 0 1 1-16 12 12 0 0 1 23 4 7 7 0 0 1 1 14h-7M24 24v17m-7-7 7 7 7-7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-chevron" aria-hidden="true">›</span></button><button class="play-install" id="installapp-play" type="button" onclick="installVitrano()"><span class="play-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><path fill="#00D6A3" d="M7 4.8v38.4L27.4 24z"/><path fill="#4285F4" d="M7 4.8 31.8 18.9 27.4 24z"/><path fill="#FBBC04" d="M27.4 24 31.8 29.1 7 43.2z"/><path fill="#EA4335" d="M31.8 18.9 42 24.7c1.9 1.1 1.9 2.7 0 3.8l-10.2 5.8-4.4-10.3z"/></svg></span><span class="play-install-copy"><b>Google Play</b><small>Додаток VITRANO</small></span><span class="play-install-download" aria-hidden="true">↓</span><span class="ios-install-chevron" aria-hidden="true">›</span></button></div></div></header>
 <main id="storefront"><div class="hero-carousel" id="heroCarousel" aria-label="Головні банери"><section class="hero"><div class="hero-copy"><div class="eyebrow">VITRANO · ТВІЙ СВІТ ПОКУПОК</div><h1>Краще для дому та щоденного життя</h1><p>Знаходь потрібні товари, порівнюй пропозиції та обирай зручно.</p><button class="primary" onclick="go('catalog')">Дивитися каталог　→</button></div><div class="hero-art" aria-hidden="true"></div></section></div>
 
@@ -822,60 +877,8 @@ async function renderCustomerAccount(body){
  catch(err){localStorage.removeItem(tokenKey);showAuth();const m=body.querySelector('#accountMessage');if(m)m.textContent=err.message}
 }
 
-<style>
-/* VITRANO customer account */
-#sectionbody .va-hero{position:relative;overflow:hidden;border-radius:24px;padding:22px;background:linear-gradient(135deg,#0b63e5,#318cff);color:#fff;margin-bottom:14px;box-shadow:0 12px 30px #1469e51c}
-#sectionbody .va-hero:after{content:"";position:absolute;width:150px;height:150px;border-radius:50%;right:-45px;top:-55px;background:#ffffff18;box-shadow:0 0 0 22px #ffffff0c}
-#sectionbody .va-eyebrow{font-size:12px;letter-spacing:1.2px;font-weight:800;text-transform:uppercase;opacity:.8}
-#sectionbody .va-hero h2{font-size:25px;line-height:1.2;margin:8px 0 6px;color:#fff}
-#sectionbody .va-hero p{margin:0;color:#e7f1ff}
-#sectionbody .va-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}
-#sectionbody .va-stat{padding:13px 10px;border:1px solid #e1eaf6;border-radius:17px;background:#fff;min-width:0}
-#sectionbody .va-stat b{display:block;font-size:21px;color:#173b65;line-height:1.2;overflow-wrap:anywhere}
-#sectionbody .va-stat span{display:block;color:#75869a;font-size:12px;margin-top:5px}
-#sectionbody .va-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
-#sectionbody .va-shortcut{border:1px solid #e0e9f5;background:#fff;border-radius:16px;padding:13px;text-align:left;color:#203b5b;font-weight:750;display:flex;gap:10px;align-items:center;min-height:58px}
-#sectionbody .va-shortcut .va-ico{width:36px;height:36px;flex:0 0 36px;border-radius:12px;background:#eaf3ff;display:grid;place-items:center;font-size:19px}
-#sectionbody .va-card{border:1px solid #e1eaf5;border-radius:20px;background:#fff;padding:16px;margin:12px 0;box-shadow:0 5px 20px #183c6410}
-#sectionbody .va-cardhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
-#sectionbody .va-cardhead h3{margin:0;font-size:19px}
-#sectionbody .va-muted{color:#77879a;font-size:13px}
-#sectionbody .va-field{display:grid;gap:6px;margin:10px 0;color:#526981;font-size:13px;font-weight:700}
-#sectionbody .va-field input{width:100%;box-sizing:border-box;border:1px solid #dce6f2;background:#fbfdff;border-radius:13px;padding:13px;font:inherit;font-size:15px;color:#18304d}
-#sectionbody .va-order{border:1px solid #e1eaf5;border-radius:18px;padding:14px;margin:11px 0;background:linear-gradient(160deg,#fff,#f9fbff)}
-#sectionbody .va-order-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-#sectionbody .va-order-no{font-size:17px;font-weight:850;color:#18385e}
-#sectionbody .va-order-total{font-size:19px;font-weight:850;color:#16845d;white-space:nowrap}
-#sectionbody .va-badge{display:inline-flex;align-items:center;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;background:#eaf2ff;color:#1764be}
-#sectionbody .va-warehouse{display:inline-flex;align-items:center;gap:6px;border-radius:10px;background:#eaf3ff;color:#145ca9;padding:7px 10px;font-weight:750;font-size:13px;margin:10px 0}
-#sectionbody .va-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:13px 0}
-#sectionbody .va-progress span{height:5px;border-radius:99px;background:#e4ebf4}
-#sectionbody .va-progress span.done{background:#2583f5}
-#sectionbody .va-order-items{border-top:1px solid #e7edf5;margin-top:11px;padding-top:8px}
-#sectionbody .va-order-item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;font-size:13px;color:#314a65}
-#sectionbody .va-order-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-#sectionbody .va-order-actions button{flex:1;min-width:120px}
-#sectionbody .va-filter{display:flex;gap:7px;overflow:auto;padding:2px 0 8px}
-#sectionbody .va-filter button{border:1px solid #dce7f5;background:#fff;color:#4c6580;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:750;white-space:nowrap}
-#sectionbody .va-filter button.active{background:#126be8;color:#fff;border-color:#126be8}
-#sectionbody .va-empty{text-align:center;padding:24px 12px;color:#72849a}
-#sectionbody .va-empty .va-empty-icon{font-size:35px;margin-bottom:8px}
-@media(max-width:420px){#sectionbody .va-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#sectionbody .va-stat{padding:10px 7px}#sectionbody .va-stat b{font-size:18px}#sectionbody .va-shortcut{padding:10px;font-size:12px}#sectionbody .va-hero{padding:18px}}
-</style>
-<style>
-#sectionbody .va-address{border:1px solid #dfe9f5;border-radius:16px;padding:13px;margin:10px 0;background:#fbfdff}
-#sectionbody .va-address-main{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-#sectionbody .va-address-title{font-weight:800;color:#1d3c60}
-#sectionbody .va-address-default{display:inline-block;border-radius:999px;background:#e4f8ee;color:#17764e;font-size:11px;font-weight:800;padding:5px 8px;margin-top:6px}
-#sectionbody .va-address-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
-#sectionbody .va-address-actions button{font-size:12px;padding:9px 11px}
-#sectionbody .va-address-form{border:1px dashed #cdddf0;background:#f7fbff;border-radius:16px;padding:13px;margin-top:12px}
-#sectionbody .va-address-form[hidden]{display:none}
-#sectionbody .va-address-form input,#sectionbody .va-address-form select{width:100%;box-sizing:border-box;border:1px solid #dce6f2;background:#fff;border-radius:12px;padding:12px;font:inherit;color:#18304d}
-#sectionbody .va-address-form label{display:grid;gap:5px;margin:9px 0;color:#526981;font-size:12px;font-weight:750}
-#checkout-saved-addresses{margin-bottom:12px}
-#checkout-saved-addresses[hidden]{display:none}
-</style>function accountAuthHeader(){return customerToken?{authorization:'Bearer '+customerToken}:{}}
+
+function accountAuthHeader(){return customerToken?{authorization:'Bearer '+customerToken}:{}}
 function accountStatusLabel(status){return ({new:'Нове',checking:'Перевіряємо наявність',confirmed:'Підтверджене',sent_to_supplier:'Передано постачальнику',shipped:'Відправлене',delivered:'Доставлене',cancelled:'Скасоване',returned:'Повернення'})[status]||status||'—'}
 function renderCustomerAccount(){
  const body=document.querySelector('#sectionbody');if(!body)return;
