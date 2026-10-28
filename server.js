@@ -718,9 +718,13 @@ async function handle(req, res) {
       }
       if (req.method === 'POST' && url.pathname === '/api/admin/products') {
         const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), mode=safeString(b.supplier_mode,40);
-        const price1=b.price_1==null||b.price_1===''?null:Number(b.price_1), price2=b.price_2==null||b.price_2===''?null:Number(b.price_2), cost1=b.purchase_cost_1===''||b.purchase_cost_1==null?null:Number(b.purchase_cost_1), cost2=b.purchase_cost_2===''||b.purchase_cost_2==null?null:Number(b.purchase_cost_2), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
-        const warehouses=mode==='both'?['Склад 1','Склад 2']:['Склад 1','Склад 2'].includes(mode)?[mode]:[];
-        if(name.length<2||!category||!warehouses.length||(warehouses.includes('Склад 1')&&(!Number.isFinite(price1)||price1<=0))||(warehouses.includes('Склад 2')&&(!Number.isFinite(price2)||price2<=0))||(cost!==null&&(!Number.isFinite(cost)||cost<0))||(warehouses.includes('Склад 1')&&cost1!==null&&(!Number.isFinite(cost1)||cost1<0))||(warehouses.includes('Склад 2')&&cost2!==null&&(!Number.isFinite(cost2)||cost2<0))) return json(res,400,{error:'Перевірте назву, постачальника, ціну продажу та ціну постачальника.'});
+        const price1=b.price_1==null||b.price_1===''?null:Number(b.price_1), price2=b.price_2==null||b.price_2===''?null:Number(b.price_2), price3=b.price_3==null||b.price_3===''?null:Number(b.price_3);
+        const cost1=b.purchase_cost_1===''||b.purchase_cost_1==null?null:Number(b.purchase_cost_1), cost2=b.purchase_cost_2===''||b.purchase_cost_2==null?null:Number(b.purchase_cost_2), cost3=b.purchase_cost_3===''||b.purchase_cost_3==null?null:Number(b.purchase_cost_3), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
+        const warehouseModes={'Склад 1':['Склад 1'],'Склад 2':['Склад 2'],'Склад 3':['Склад 3'],'both':['Склад 1','Склад 2'],'warehouse1_3':['Склад 1','Склад 3'],'warehouse2_3':['Склад 2','Склад 3'],'all':['Склад 1','Склад 2','Склад 3']};
+        const warehouses=warehouseModes[mode]||[];
+        const prices={'Склад 1':price1,'Склад 2':price2,'Склад 3':price3};
+        const costs={'Склад 1':(cost1===null?cost:cost1),'Склад 2':(cost2===null?cost:cost2),'Склад 3':(cost3===null?cost:cost3)};
+        if(name.length<2||!category||!warehouses.length||warehouses.some(w=>!Number.isFinite(prices[w])||prices[w]<=0)||(cost!==null&&(!Number.isFinite(cost)||cost<0))||warehouses.some(w=>costs[w]!==null&&(!Number.isFinite(costs[w])||costs[w]<0))) return json(res,400,{error:'Перевірте назву, склад, ціну продажу та собівартість для кожного обраного складу.'});
         const slug=(safeString(b.slug,180)||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,170)+'-'+Date.now().toString(36);
         const client=await pool.connect();
         try {
@@ -732,7 +736,7 @@ async function handle(req, res) {
           for (const warehouse of warehouses) {
             let sup=await client.query('select id from suppliers where name=$1 order by created_at limit 1',[warehouse]);
             if(!sup.rows.length) sup=await client.query('insert into suppliers(name) values($1) returning id',[warehouse]);
-            const price=warehouse==='Склад 1'?price1:price2, offerCost=warehouse==='Склад 1'?(cost1===null?cost:cost1):(cost2===null?cost:cost2);
+            const price=prices[warehouse], offerCost=costs[warehouse];
             const offer=await client.query('insert into supplier_offers(product_id,supplier_id,purchase_cost,retail_price,availability,is_active) values($1,$2,$3,$4,$5,true) returning id',
               [p.rows[0].id,sup.rows[0].id,offerCost,price,['available','check','unavailable'].includes(b.availability)?b.availability:'check']);
             if (b.markup_type && ['amount','percent'].includes(b.markup_type) && Number.isFinite(Number(b.markup_value)) && Number(b.markup_value)>=0) {
