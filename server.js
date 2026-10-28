@@ -532,7 +532,7 @@ async function handle(req, res) {
           pool.query('select count(*)::int as count from products'),
           pool.query('select count(*)::int as count from orders'),
           pool.query('select count(*)::int as count from suppliers where is_active=true'),
-          pool.query("select coalesce(sum(subtotal),0)::numeric(12,2) as revenue from orders where lower(trim(status)) not in ('cancelled','returned','скасовано','повернення')")
+          pool.query(`select coalesce(sum((i.unit_price-coalesce(i.supplier_cost_snapshot,0))*i.quantity),0)::numeric(12,2) as revenue from orders o join order_items i on i.order_id=o.id where lower(trim(o.status)) not in ('cancelled','returned','скасовано','повернення')`)
         ]);
         return json(res,200,{products:p.rows[0].count,orders:o.rows[0].count,suppliers:s.rows[0].count,revenue:fin.rows[0].revenue});
       }
