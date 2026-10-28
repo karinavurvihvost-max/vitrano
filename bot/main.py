@@ -26,9 +26,14 @@ def health():
 def api(method, payload=None, timeout=35):
     if not BOT_TOKEN:
         return {}
-    response = requests.post(f"{API}/{method}", json=payload or {}, timeout=timeout)
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = requests.post(f"{API}/{method}", json=payload or {}, timeout=timeout)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        # Never log exception text: request URLs contain the bot token.
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        raise RuntimeError(f"Telegram request failed (HTTP {status or 'network error'}). Check the token and bot configuration.") from None
     if not data.get("ok"):
         raise RuntimeError(data.get("description", "Telegram API error"))
     return data.get("result")
@@ -143,8 +148,8 @@ def handle_message(message):
             sessions.pop(str(user_id), None)
             send(chat_id, "Готово: публікацію надіслано до каналу VITRANO. Перевірте, чи фото, текст, кнопки та посилання відображаються правильно.")
         except Exception as exc:
-            log.exception("Failed to publish")
-            send(chat_id, f"Не вдалося опублікувати. Перевірте CHANNEL_ID, права бота та посилання. Деталі: {str(exc)[:250]}")
+            log.error("Failed to publish (%s)", type(exc).__name__)
+            send(chat_id, "Не вдалося опублікувати. Перевірте токен, CHANNEL_ID, права бота та посилання. Деталі помилки приховано з міркувань безпеки.")
         return
 
 def poll():
@@ -162,9 +167,10 @@ def poll():
                         handle_message(update["message"])
                     except Exception:
                         log.exception("Message handling failed")
-        except Exception:
-            log.exception("Polling failed")
-            time.sleep(3)
+        except Exception as exc:
+            # Avoid exception details because Telegram request errors can contain secret URLs.
+            log.error("Polling failed (%s)", type(exc).__name__)
+            time.sleep(5)
 
 if __name__ == "__main__":
     threading.Thread(target=poll, daemon=True).start()
