@@ -304,10 +304,10 @@ async function setWarehouseVisibility(name,visible){
 }
 async function loadAnalytics(){
  const d=await api('/admin/analytics'),x=d.analytics||{};
- const items=[['Унікальні відвідувачі',x.unique_visitors_total??0],['Відвідування',x.visits_total??0],['Зареєстровані кабінети',x.customer_accounts_total??0],['Успішні реєстрації з моменту запуску',x.registrations_total??0],['Відвідувачі сьогодні',x.visitors_today??0],['Відвідування за 7 днів',x.visits_7d??0],['Реєстрації за 7 днів',x.registrations_7d??0]];
+ const items=[['Встановлено на смартфонах і ПК',x.installs_total??0],['Встановлення сьогодні',x.installs_today??0],['Встановлення за 7 днів',x.installs_7d??0],['Android',x.installs_android??0],['iPhone / iPad',x.installs_ios??0],['Інші пристрої',x.installs_other??0],['Унікальні відвідувачі',x.unique_visitors_total??0],['Відвідування',x.visits_total??0],['Зареєстровані кабінети',x.customer_accounts_total??0],['Успішні реєстрації з моменту запуску',x.registrations_total??0],['Відвідувачі сьогодні',x.visitors_today??0],['Відвідування за 7 днів',x.visits_7d??0],['Реєстрації за 7 днів',x.registrations_7d??0]];
  $('#analyticsStats').innerHTML=items.map(v=>'<div class="stat"><small>'+esc(v[0])+'</small><b>'+esc(v[1])+'</b></div>').join('');
  const days=d.daily||[];$('#analyticsDaily').innerHTML='<div class="wrap"><table style="min-width:0"><thead><tr><th>День</th><th>Відвідувачі</th><th>Реєстрації</th></tr></thead><tbody>'+days.map(v=>'<tr><td>'+esc(v.day)+'</td><td>'+esc(v.visitors)+'</td><td>'+esc(v.registrations)+'</td></tr>').join('')+'</tbody></table></div>';
- $('#analyticsNote').textContent=d.note||'';
+ $('#analyticsNote').textContent=(d.note||'')+' Лічильник встановлень починає накопичувати дані після оновлення; раніше встановлені застосунки можуть бути враховані лише коли відкриють VITRANO як встановлений застосунок.';
 }
 let chatConversations=[],activeChatConversation='';
 let chatNotifyReady=false;
