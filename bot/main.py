@@ -168,8 +168,11 @@ def poll():
                     except Exception:
                         log.exception("Message handling failed")
         except Exception as exc:
-            # Avoid exception details because Telegram request errors can contain secret URLs.
-            log.error("Polling failed (%s)", type(exc).__name__)
+            # api() sanitizes Telegram HTTP errors; only print those safe messages.
+            if isinstance(exc, RuntimeError) and str(exc).startswith("Telegram request failed (HTTP "):
+                log.error("Polling failed: %s", str(exc))
+            else:
+                log.error("Polling failed (%s)", type(exc).__name__)
             time.sleep(5)
 
 if __name__ == "__main__":
