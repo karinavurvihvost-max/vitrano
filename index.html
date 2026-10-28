@@ -600,6 +600,61 @@ img[loading="lazy"]{content-visibility:auto;}
   background:#dbeafe;
 }
 
+
+/* Make warehouse prices stand out clearly in the three-column comparison */
+#detailcontent .warehouse-compare-row .supplier-option{
+  min-height:126px;
+  border:1px solid #dce6f2;
+  background:linear-gradient(160deg,#ffffff 0%,#f7faff 100%);
+  box-shadow:0 2px 7px rgba(26,58,95,.05);
+  padding:10px 9px;
+  gap:8px;
+}
+#detailcontent .warehouse-compare-row .supplier-option-info b{
+  font-size:13px;
+  font-weight:750;
+  color:#1b2f4b;
+}
+#detailcontent .warehouse-compare-row .supplier-option-info .muted{
+  font-size:10px;
+  line-height:1.25;
+  color:#718096;
+}
+#detailcontent .warehouse-compare-row .supplier-option strong{
+  display:inline-flex;
+  align-items:center;
+  align-self:flex-start;
+  max-width:100%;
+  padding:5px 7px;
+  border-radius:8px;
+  background:#edf3fb;
+  color:#24476f;
+  font-size:15px;
+  font-weight:850;
+  line-height:1.1;
+  letter-spacing:-.2px;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+#detailcontent .warehouse-compare-row .supplier-option.selected{
+  border:2px solid #287cf0;
+  background:linear-gradient(160deg,#eff7ff 0%,#e8f2ff 100%);
+  box-shadow:0 3px 12px rgba(40,124,240,.12);
+  padding:9px 8px;
+}
+#detailcontent .warehouse-compare-row .supplier-option.selected strong{
+  background:#d8f5e7;
+  color:#14764b;
+  font-size:16px;
+}
+@media(max-width:380px){
+  #detailcontent .warehouse-compare-row{gap:4px}
+  #detailcontent .warehouse-compare-row .supplier-option{padding:8px 6px;min-height:122px}
+  #detailcontent .warehouse-compare-row .supplier-option.selected{padding:7px 5px}
+  #detailcontent .warehouse-compare-row .supplier-option strong{font-size:13px;padding:5px}
+  #detailcontent .warehouse-compare-row .supplier-option.selected strong{font-size:14px}
+}
+
 </style></head><body>
 <div class="app"><header class="topbar"><div class="brand"><span class="brandmark">V</span> VITRANO</div><div class="top-actions"><button class="ghost" id="header-chat-button" type="button" onclick="document.getElementById(&quot;vitrano-chat-launch&quot;).click()">💬 Менеджер</button><div class="install-actions"><button class="ios-install" id="installapp" hidden onclick="installVitrano()"><span class="ios-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="white" stroke-width="2.8"/><path d="M11 26h7l7-11m-7 11-6 10m16-22 10 22m-10-22 7 11h6M18 26h12" fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-copy"><b>Встановити</b><small>Додаток VITRANO</small></span><span class="ios-install-cloud" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M14 31h-2a8 8 0 0 1 1-16 12 12 0 0 1 23 4 7 7 0 0 1 1 14h-7M24 24v17m-7-7 7 7 7-7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ios-install-chevron" aria-hidden="true">›</span></button><button class="play-install" id="installapp-play" type="button" onclick="installVitrano()"><span class="play-install-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><path fill="#00D6A3" d="M7 4.8v38.4L27.4 24z"/><path fill="#4285F4" d="M7 4.8 31.8 18.9 27.4 24z"/><path fill="#FBBC04" d="M27.4 24 31.8 29.1 7 43.2z"/><path fill="#EA4335" d="M31.8 18.9 42 24.7c1.9 1.1 1.9 2.7 0 3.8l-10.2 5.8-4.4-10.3z"/></svg></span><span class="play-install-copy"><b>Google Play</b><small>Додаток VITRANO</small></span><span class="play-install-download" aria-hidden="true">↓</span><span class="ios-install-chevron" aria-hidden="true">›</span></button></div></div></header>
 <main id="storefront"><div class="hero-carousel" id="heroCarousel" aria-label="Головні банери"><section class="hero"><div class="hero-copy"><div class="eyebrow">VITRANO · ТВІЙ СВІТ ПОКУПОК</div><h1>Краще для дому та щоденного життя</h1><p>Знаходь потрібні товари, порівнюй пропозиції та обирай зручно.</p><button class="primary" onclick="go('catalog')">Дивитися каталог　→</button></div><div class="hero-art" aria-hidden="true"></div></section></div>
