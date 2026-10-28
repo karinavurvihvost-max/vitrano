@@ -369,10 +369,12 @@ async function handle(req, res) {
           try{
             await client.query('BEGIN');
             if(addressId){const exists=await client.query('select id from customer_addresses where id=$1 and customer_id=$2 for update',[addressId,customer.id]);if(!exists.rows.length){await client.query('ROLLBACK');return json(res,404,{error:'Адресу не знайдено.'})}}
-            if(makeDefault||req.method==='POST'){const count=await client.query('select count(*)::int as n from customer_addresses where customer_id=$1',[customer.id]);if(makeDefault||Number(count.rows[0].n)===0)await client.query('update customer_addresses set is_default=false,updated_at=now() where customer_id=$1',[customer.id])}
+            const existingCount=await client.query('select count(*)::int as n from customer_addresses where customer_id=$1',[customer.id]);
+            const shouldBeDefault=makeDefault||(req.method==='POST'&&Number(existingCount.rows[0].n)===0);
+            if(shouldBeDefault)await client.query('update customer_addresses set is_default=false,updated_at=now() where customer_id=$1',[customer.id]);
             let result;
-            if(req.method==='POST')result=await client.query('insert into customer_addresses(customer_id,label,full_name,phone,carrier,region,city,branch,is_default) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id,label,full_name,phone,carrier,region,city,branch,is_default,created_at,updated_at',[customer.id,label,full_name,phone,carrier,region,city,branch,makeDefault||Number((await client.query('select count(*)::int as n from customer_addresses where customer_id=$1',[customer.id])).rows[0].n)===0]);
-            else result=await client.query('update customer_addresses set label=$1,full_name=$2,phone=$3,carrier=$4,region=$5,city=$6,branch=$7,is_default=$8,updated_at=now() where id=$9 and customer_id=$10 returning id,label,full_name,phone,carrier,region,city,branch,is_default,created_at,updated_at',[label,full_name,phone,carrier,region,city,branch,makeDefault,addressId,customer.id]);
+            if(req.method==='POST')result=await client.query('insert into customer_addresses(customer_id,label,full_name,phone,carrier,region,city,branch,is_default) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id,label,full_name,phone,carrier,region,city,branch,is_default,created_at,updated_at',[customer.id,label,full_name,phone.replace(/[()\\s-]/g,''),carrier,region,city,branch,shouldBeDefault]);
+            else result=await client.query('update customer_addresses set label=$1,full_name=$2,phone=$3,carrier=$4,region=$5,city=$6,branch=$7,is_default=$8,updated_at=now() where id=$9 and customer_id=$10 returning id,label,full_name,phone,carrier,region,city,branch,is_default,created_at,updated_at',[label,full_name,phone.replace(/[()\\s-]/g,''),carrier,region,city,branch,makeDefault,addressId,customer.id]);
             await client.query('COMMIT');return json(res,req.method==='POST'?201:200,{address:result.rows[0],message:'Адресу збережено.'});
           }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
         }
