@@ -573,8 +573,8 @@ async function handle(req, res) {
             (select count(*)::int from site_analytics_events where event_type='visit') as visits_total,
             (select count(*)::int from site_analytics_events where event_type='registration') as registrations_total,
             (select count(distinct visitor_hash)::int from site_analytics_events where event_type='visit' and created_at >= date_trunc('day',now() at time zone 'Europe/Kyiv') at time zone 'Europe/Kyiv') as visitors_today,
-            (select count(*)::int from site_analytics_events where event_type='visit' and created_at >= now()-interval '7 days') as visits_7d,
-            (select count(*)::int from site_analytics_events where event_type='registration' and created_at >= now()-interval '7 days') as registrations_7d,
+            (select count(*)::int from site_analytics_events where event_type='visit' and created_at >= (((now() at time zone 'Europe/Kyiv')::date - 6)::timestamp at time zone 'Europe/Kyiv')) as visits_7d,
+            (select count(*)::int from site_analytics_events where event_type='registration' and created_at >= (((now() at time zone 'Europe/Kyiv')::date - 6)::timestamp at time zone 'Europe/Kyiv')) as registrations_7d,
             (select count(*)::int from customers) as customer_accounts_total,
             (select count(*)::int from pwa_installs) as installs_total,
             (select count(*)::int from pwa_installs where first_seen >= date_trunc('day',now() at time zone 'Europe/Kyiv') at time zone 'Europe/Kyiv') as installs_today,
@@ -583,13 +583,36 @@ async function handle(req, res) {
             (select count(*)::int from pwa_installs where platform='ios') as installs_ios,
             (select count(*)::int from pwa_installs where platform in ('desktop','other')) as installs_other
         `);
-        const daily=await pool.query(`select to_char(day,'DD.MM') as day,
-          coalesce(v.visitors,0)::int as visitors,coalesce(r.registrations,0)::int as registrations
-          from generate_series(date_trunc('day',now()-interval '6 days'),date_trunc('day',now()),interval '1 day') day
-          left join (select date_trunc('day',created_at) d,count(distinct visitor_hash) visitors from site_analytics_events where event_type='visit' and created_at>=now()-interval '7 days' group by 1) v on v.d=day
-          left join (select date_trunc('day',created_at) d,count(*) registrations from site_analytics_events where event_type='registration' and created_at>=now()-interval '7 days' group by 1) r on r.d=day
-          order by day`);
-        return json(res,200,{analytics:rows[0],daily:daily.rows,note:'Статистика відвідувань збирається з моменту встановлення лічильника; старі відвідування не відновлюються.'});
+        const daily=await pool.query(`
+          with days as (
+            select generate_series(
+              (now() at time zone 'Europe/Kyiv')::date - 6,
+              (now() at time zone 'Europe/Kyiv')::date,
+              interval '1 day'
+            )::date as day
+          )
+          select to_char(days.day,'DD.MM') as day,
+            coalesce(v.visitors,0)::int as visitors,
+            coalesce(v.visits,0)::int as visits,
+            coalesce(r.registrations,0)::int as registrations
+          from days
+          left join (
+            select (created_at at time zone 'Europe/Kyiv')::date as d,
+              count(distinct visitor_hash) as visitors, count(*) as visits
+            from site_analytics_events
+            where event_type='visit'
+              and created_at >= (((now() at time zone 'Europe/Kyiv')::date - 6)::timestamp at time zone 'Europe/Kyiv')
+            group by 1
+          ) v on v.d=days.day
+          left join (
+            select (created_at at time zone 'Europe/Kyiv')::date as d, count(*) as registrations
+            from site_analytics_events
+            where event_type='registration'
+              and created_at >= (((now() at time zone 'Europe/Kyiv')::date - 6)::timestamp at time zone 'Europe/Kyiv')
+            group by 1
+          ) r on r.d=days.day
+          order by days.day`);
+        return json(res,200,{analytics:rows[0],daily:daily.rows,note:'Загальна кількість кабінетів включає всі записи в базі. Успішні реєстрації рахуються окремо з моменту запуску лічильника; старі реєстрації не відновлюються. У таблиці показані унікальні відвідувачі та всі відвідування за кожен календарний день за київським часом.'});
       }
       if (url.pathname === '/api/admin/chat/conversations' && req.method === 'GET') {
         await pool.query(`create table if not exists support_chat_messages (
