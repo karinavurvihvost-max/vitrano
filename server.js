@@ -557,6 +557,21 @@ async function handle(req, res) {
         if (!configured) return json(res,503,{error:'Адмін-доступ ще не налаштований.'});
         if ((req.headers.authorization || '') !== 'Bearer ' + configured) return json(res,401,{error:'Потрібна авторизація адміністратора.'});
       }
+      if(url.pathname==='/api/admin/customers'&&req.method==='GET'){
+        const search=safeString(new URL(req.url,'http://localhost').searchParams.get('q')||'',100);
+        const {rows}=await pool.query(`
+          select c.id,c.full_name,c.phone,c.created_at,
+            count(distinct o.id)::int as orders_count,
+            coalesce(sum(o.subtotal),0)::numeric as orders_total
+          from customers c
+          left join orders o on o.customer_id=c.id
+          where ($1='' or c.full_name ilike '%'||$1||'%' or c.phone ilike '%'||$1||'%')
+          group by c.id,c.full_name,c.phone,c.created_at
+          order by c.created_at desc nulls last,c.id desc
+          limit 1000
+        `,[search]);
+        return json(res,200,{customers:rows});
+      }
       if(url.pathname==='/api/admin/analytics'&&req.method==='GET'){
         await pool.query(`create table if not exists pwa_installs (
           installation_id text primary key, platform text not null,
