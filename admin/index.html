@@ -283,9 +283,9 @@ $('#form').onsubmit=async e=>{e.preventDefault();let b=Object.fromEntries(new Fo
 
 async function loadAnalytics(){
  const d=await api('/admin/analytics'),x=d.analytics||{};
- const items=[['Унікальні відвідувачі',x.unique_visitors_total??0],['Відвідування',x.visits_total??0],['Зареєстровані кабінети',x.customer_accounts_total??0],['Успішні реєстрації з моменту запуску',x.registrations_total??0],['Відвідувачі сьогодні',x.visitors_today??0],['Відвідування за 7 днів',x.visits_7d??0],['Реєстрації за 7 днів',x.registrations_7d??0]];
+ const items=[['Унікальні відвідувачі за весь час',x.unique_visitors_total??0],['Усі відвідування за весь час',x.visits_total??0],['Усі кабінети в базі',x.customer_accounts_total??0],['Успішні реєстрації після запуску лічильника',x.registrations_total??0],['Унікальні відвідувачі сьогодні',x.visitors_today??0],['Усі відвідування за 7 календарних днів',x.visits_7d??0],['Реєстрації за 7 календарних днів',x.registrations_7d??0]];
  $('#analyticsStats').innerHTML=items.map(v=>'<div class="stat"><small>'+esc(v[0])+'</small><b>'+esc(v[1])+'</b></div>').join('');
- const days=d.daily||[];$('#analyticsDaily').innerHTML='<div class="wrap"><table style="min-width:0"><thead><tr><th>День</th><th>Відвідувачі</th><th>Реєстрації</th></tr></thead><tbody>'+days.map(v=>'<tr><td>'+esc(v.day)+'</td><td>'+esc(v.visitors)+'</td><td>'+esc(v.registrations)+'</td></tr>').join('')+'</tbody></table></div>';
+ const days=d.daily||[];$('#analyticsDaily').innerHTML='<div class="wrap"><table style="min-width:0"><thead><tr><th>День</th><th>Унікальні відвідувачі</th><th>Усі відвідування</th><th>Реєстрації</th></tr></thead><tbody>'+days.map(v=>'<tr><td>'+esc(v.day)+'</td><td>'+esc(v.visitors)+'</td><td>'+esc(v.visits??0)+'</td><td>'+esc(v.registrations)+'</td></tr>').join('')+'</tbody></table></div>';
  $('#analyticsNote').textContent=d.note||'';
 }
 let chatConversations=[],activeChatConversation='';
