@@ -47,6 +47,26 @@ const clean = v => typeof v === 'string' ? v.trim() : '';
 const safeString = (v, max = 160) => clean(v).slice(0, max);
 const validPhone = v => /^[+\d()\s-]{9,20}$/.test(v);
 const requireDb = () => { if (!pool) { const e = new Error('Database not configured'); e.status = 503; throw e; } };
+let productCategoriesReady = false;
+async function ensureProductCategories() {
+  requireDb();
+  if (productCategoriesReady) return;
+  await pool.query("CREATE TABLE IF NOT EXISTS product_categories (product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE, category_id uuid NOT NULL REFERENCES categories(id) ON DELETE CASCADE, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(product_id, category_id))");
+  await pool.query("CREATE INDEX IF NOT EXISTS product_categories_category_idx ON product_categories(category_id, product_id)");
+  await pool.query("INSERT INTO product_categories(product_id, category_id) SELECT id, category_id FROM products WHERE category_id IS NOT NULL ON CONFLICT DO NOTHING");
+  productCategoriesReady = true;
+}
+async function resolveProductCategoryIds(client, values) {
+  const names = [...new Set((Array.isArray(values) ? values : [values]).map(v => safeString(v, 100)).filter(Boolean))].slice(0, 20);
+  if (!names.length) throw Object.assign(new Error('Оберіть щонайменше одну категорію.'), {status: 400});
+  const ids = [];
+  for (const name of names) {
+    const slug = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi, '-').replace(/^-|-$/g, '').slice(0, 80) || 'other';
+    const result = await client.query('insert into categories(name,slug) values($1,$2) on conflict(name) do update set name=excluded.name returning id', [name, slug]);
+    ids.push(result.rows[0].id);
+  }
+  return ids;
+}
 const hashToken = token => createHash('sha256').update(token).digest('hex');
 
 function htmlText(value='') {
@@ -282,29 +302,29 @@ async function handle(req, res) {
       const value=rows[0]?.setting_value||{}; return json(res,200,{hero_banner:value.hero_banner||value.banners?.[0]||value,hero_banners:Array.isArray(value.banners)?value.banners: [value.hero_banner||value]});
     }
     if (req.method === 'GET' && url.pathname === '/api/categories') {
-      requireDb();
-      const { rows } = await pool.query('select id,name,slug,sort_order from categories where is_visible=true order by sort_order,name');
+      await ensureProductCategories();
+      const { rows } = await pool.query('select distinct c.id,c.name,c.slug,c.sort_order from categories c join product_categories pc on pc.category_id=c.id join products p on p.id=pc.product_id where c.is_visible=true and p.is_visible=true order by c.sort_order,c.name');
       return json(res, 200, { categories: rows });
     }
     if (req.method === 'GET' && url.pathname === '/api/products') {
-      requireDb();
+      await ensureProductCategories();
       const q = safeString(url.searchParams.get('q'), 80);
       const category = safeString(url.searchParams.get('category'), 80);
       const params = [], filters = ['p.is_visible=true'];
       if (q) { params.push('%' + q.replace(/[\\%_]/g, '\\$&') + '%'); filters.push(`(p.name ilike $1 escape '\\\\' or coalesce(p.description,'') ilike $1 escape '\\\\')`); }
-      if (category) { params.push(category); filters.push(`c.slug=$${params.length}`); }
+      if (category) { params.push(category); filters.push(`exists (select 1 from product_categories pcx join categories cx on cx.id=pcx.category_id where pcx.product_id=p.id and cx.slug=${params.length})`); }
       const { rows } = await pool.query(`
         select p.id,p.sku,p.name,p.slug,p.description,p.characteristics,p.category_id,p.image_urls,p.main_image_url,p.promo_price,p.promotion_start,p.promotion_end,
           coalesce(rv.average_rating,0)::numeric(2,1) as average_rating,coalesce(rv.review_count,0)::int as review_count,
-          case when c.id is null then null else json_build_object('name',c.name,'slug',c.slug) end as categories,
+          (select coalesce(json_agg(json_build_object('id',cx.id,'name',cx.name,'slug',cx.slug) order by cx.sort_order,cx.name),'[]'::json) from product_categories pcx join categories cx on cx.id=pcx.category_id where pcx.product_id=p.id and cx.is_visible=true) as categories,
           coalesce(json_agg(json_build_object('id',o.id,'supplier_id',o.supplier_id,'supplier_name',s.name,'retail_price',o.retail_price,'availability',o.availability,'last_checked_at',o.last_checked_at))
             filter (where o.id is not null and o.retail_price is not null), '[]'::json) as offers
-        from products p left join categories c on c.id=p.category_id
+        from products p
         left join supplier_offers o on o.product_id=p.id and o.is_active=true
         left join suppliers s on s.id=o.supplier_id and s.is_active=true
         left join (select product_id,avg(rating)::numeric(2,1) as average_rating,count(*)::int as review_count from reviews where status='published' group by product_id) rv on rv.product_id=p.id
         where ${filters.join(' and ')}
-        group by p.id,c.id,rv.average_rating,rv.review_count order by p.name asc limit 100`, params);
+        group by p.id,rv.average_rating,rv.review_count order by p.name asc limit 100`, params);
       return json(res, 200, { products: rows.filter(p => p.offers.length > 0) });
     }
     const publicReviewMatch=url.pathname.match(/^\/api\/products\/([0-9a-f-]{36})\/reviews$/i);
@@ -723,9 +743,12 @@ async function handle(req, res) {
         return json(res,200,{message:'Відгук оновлено.'});
       }
       if (req.method === 'GET' && url.pathname === '/api/admin/products') {
-        const {rows}=await pool.query(`select p.id,p.sku,p.name,p.slug,p.description,p.characteristics,p.category_id,p.image_urls,p.main_image_url,p.promo_price,p.promotion_start,p.promotion_end,p.is_visible,c.name as category,c.slug as category_slug,
+        await ensureProductCategories();
+        const {rows}=await pool.query(`select p.id,p.sku,p.name,p.slug,p.description,p.characteristics,p.category_id,p.image_urls,p.main_image_url,p.promo_price,p.promotion_start,p.promotion_end,p.is_visible,
+          coalesce((select cx.name from product_categories pcx join categories cx on cx.id=pcx.category_id where pcx.product_id=p.id order by cx.sort_order,cx.name limit 1),'Інше') as category,
+          coalesce((select json_agg(json_build_object('id',cx.id,'name',cx.name,'slug',cx.slug) order by cx.sort_order,cx.name) from product_categories pcx join categories cx on cx.id=pcx.category_id where pcx.product_id=p.id),'[]'::json) as categories,
           coalesce(json_agg(json_build_object('id',o.id,'supplier_id',o.supplier_id,'supplier_name',s.name,'retail_price',o.retail_price,'purchase_cost',o.purchase_cost,'availability',o.availability,'is_active',o.is_active)) filter(where o.id is not null),'[]'::json) as offers
-          from products p left join categories c on c.id=p.category_id left join supplier_offers o on o.product_id=p.id left join suppliers s on s.id=o.supplier_id group by p.id,c.id order by p.created_at desc`);
+          from products p left join supplier_offers o on o.product_id=p.id left join suppliers s on s.id=o.supplier_id group by p.id order by p.created_at desc`);
         return json(res,200,{products:rows});
       }
       if (req.method === 'GET' && url.pathname === '/api/admin/orders') {
@@ -764,22 +787,22 @@ async function handle(req, res) {
         return json(res,200,{suppliers:rows});
       }
       if (req.method === 'POST' && url.pathname === '/api/admin/products') {
-        const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), mode=safeString(b.supplier_mode,40);
+        const b=await readBody(req), name=safeString(b.name,180), category=safeString(b.category,100), categoryNames=Array.isArray(b.categories)&&b.categories.length?b.categories:[category], mode=safeString(b.supplier_mode,40);
         const price1=b.price_1==null||b.price_1===''?null:Number(b.price_1), price2=b.price_2==null||b.price_2===''?null:Number(b.price_2), price3=b.price_3==null||b.price_3===''?null:Number(b.price_3);
         const cost1=b.purchase_cost_1===''||b.purchase_cost_1==null?null:Number(b.purchase_cost_1), cost2=b.purchase_cost_2===''||b.purchase_cost_2==null?null:Number(b.purchase_cost_2), cost3=b.purchase_cost_3===''||b.purchase_cost_3==null?null:Number(b.purchase_cost_3), cost=b.purchase_cost===''||b.purchase_cost==null?null:Number(b.purchase_cost);
         const warehouseModes={'Склад 1':['Склад 1'],'Склад 2':['Склад 2'],'Склад 3':['Склад 3'],'both':['Склад 1','Склад 2'],'warehouse1_3':['Склад 1','Склад 3'],'warehouse2_3':['Склад 2','Склад 3'],'all':['Склад 1','Склад 2','Склад 3']};
         const warehouses=warehouseModes[mode]||[];
         const prices={'Склад 1':price1,'Склад 2':price2,'Склад 3':price3};
         const costs={'Склад 1':(cost1===null?cost:cost1),'Склад 2':(cost2===null?cost:cost2),'Склад 3':(cost3===null?cost:cost3)};
-        if(name.length<2||!category||!warehouses.length||warehouses.some(w=>!Number.isFinite(prices[w])||prices[w]<=0)||(cost!==null&&(!Number.isFinite(cost)||cost<0))||warehouses.some(w=>costs[w]!==null&&(!Number.isFinite(costs[w])||costs[w]<0))) return json(res,400,{error:'Перевірте назву, склад, ціну продажу та собівартість для кожного обраного складу.'});
+        if(name.length<2||!categoryNames.some(x=>safeString(x,100))||!warehouses.length||warehouses.some(w=>!Number.isFinite(prices[w])||prices[w]<=0)||(cost!==null&&(!Number.isFinite(cost)||cost<0))||warehouses.some(w=>costs[w]!==null&&(!Number.isFinite(costs[w])||costs[w]<0))) return json(res,400,{error:'Перевірте назву, склад, ціну продажу та собівартість для кожного обраного складу.'});
         const slug=(safeString(b.slug,180)||name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,170)+'-'+Date.now().toString(36);
         const client=await pool.connect();
         try {
           await client.query('BEGIN');
-          const catSlug=category.toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'other';
-          const cat=await client.query('insert into categories(name,slug) values($1,$2) on conflict(name) do update set name=excluded.name returning id',[category,catSlug]);
+          const categoryIds=await resolveProductCategoryIds(client,categoryNames); const cat={rows:[{id:categoryIds[0]}]};
           const p=await client.query('insert into products(sku,name,slug,description,category_id,image_urls,main_image_url,is_visible) values($1,$2,$3,$4,$5,$6,$7,$8) returning id',
             [safeString(b.sku,80)||null,name,slug,safeString(b.description,3000),cat.rows[0].id,Array.isArray(b.image_urls)?b.image_urls.filter(x=>typeof x==='string'&&/^https:\/\//.test(x)).slice(0,8):[],(typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000))||null,b.is_visible===true]);
+          for (const categoryId of categoryIds) await client.query('insert into product_categories(product_id,category_id) values($1,$2) on conflict do nothing',[p.rows[0].id,categoryId]);
           for (const warehouse of warehouses) {
             let sup=await client.query('select id from suppliers where name=$1 order by created_at limit 1',[warehouse]);
             if(!sup.rows.length) sup=await client.query('insert into suppliers(name) values($1) returning id',[warehouse]);
@@ -805,7 +828,7 @@ async function handle(req, res) {
         if (b.sku!==undefined) await pool.query('update products set sku=$1,updated_at=now() where id=$2',[safeString(b.sku,80)||null,id]);
         if (b.description!==undefined) await pool.query('update products set description=$1,updated_at=now() where id=$2',[safeString(b.description,3000),id]);
         if (b.promo_price!==undefined||b.promotion_start!==undefined||b.promotion_end!==undefined) { const raw=b.promo_price; const promo=raw===null||raw===''?null:Number(raw); if(raw!==undefined&&raw!==null&&raw!==''&&(!Number.isFinite(promo)||promo<0))return json(res,400,{error:'Некоректна акційна ціна.'}); const start=b.promotion_start?new Date(b.promotion_start):null,end=b.promotion_end?new Date(b.promotion_end):null; if(b.promotion_start&&Number.isNaN(start.getTime()))return json(res,400,{error:'Некоректна дата початку акції.'}); if(b.promotion_end&&Number.isNaN(end.getTime()))return json(res,400,{error:'Некоректна дата завершення акції.'}); if(start&&end&&end<=start)return json(res,400,{error:'Завершення акції має бути пізніше початку.'}); await pool.query('update products set promo_price=$1,promotion_start=$2,promotion_end=$3,updated_at=now() where id=$4',[raw===undefined?null:promo,b.promotion_start||null,b.promotion_end||null,id]); }
-        if (b.category!==undefined) { const category=safeString(b.category,100)||'Інше'; const slug=category.toLowerCase().normalize('NFKD').replace(/[^a-z0-9а-яіїєґ]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'other'; const cat=await pool.query('insert into categories(name,slug) values($1,$2) on conflict(name) do update set name=excluded.name returning id',[category,slug]); await pool.query('update products set category_id=$1,updated_at=now() where id=$2',[cat.rows[0].id,id]); }
+        if (b.category!==undefined || b.categories!==undefined) { await ensureProductCategories(); const client=await pool.connect(); try { await client.query('BEGIN'); const names=Array.isArray(b.categories)&&b.categories.length?b.categories:(b.category?[b.category]:[]); const ids=await resolveProductCategoryIds(client,names); await client.query('delete from product_categories where product_id=$1',[id]); for(const categoryId of ids) await client.query('insert into product_categories(product_id,category_id) values($1,$2) on conflict do nothing',[id,categoryId]); await client.query('update products set category_id=$1,updated_at=now() where id=$2',[ids[0],id]); await client.query('COMMIT'); } catch(e) { await client.query('ROLLBACK').catch(()=>{}); throw e; } finally { client.release(); } }
         if (b.main_image_url!==undefined) { const img=typeof b.main_image_url==='string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(b.main_image_url) && b.main_image_url.length<=1500000 ? b.main_image_url : safeString(b.main_image_url,1000); if(typeof img==='string'&&img.startsWith('data:image/')&&img.length>1500000)return json(res,400,{error:'Фото завелике. Виберіть менше фото.'}); await pool.query('update products set main_image_url=$1,updated_at=now() where id=$2',[img||null,id]); }
         if (b.image_urls!==undefined) { if(!Array.isArray(b.image_urls)||b.image_urls.length>8||b.image_urls.some(x=>typeof x!=='string'||(!/^https:\/\//i.test(x)&&!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(x))||x.length>1500000)) return json(res,400,{error:'Фото: додайте до 8 коректних HTTPS-посилань або зображень у підтримуваному форматі.'}); await pool.query('update products set image_urls=$1,updated_at=now() where id=$2',[b.image_urls,id]); }
         if (b.offer_id && (b.retail_price!==undefined||b.purchase_cost!==undefined||b.availability!==undefined)) {
