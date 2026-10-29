@@ -557,6 +557,15 @@ async function handle(req, res) {
         if (!configured) return json(res,503,{error:'Адмін-доступ ще не налаштований.'});
         if ((req.headers.authorization || '') !== 'Bearer ' + configured) return json(res,401,{error:'Потрібна авторизація адміністратора.'});
       }
+      if(url.pathname==='/api/admin/installs'&&req.method==='GET'){
+        const {rows}=await pool.query(`
+          select installation_id,platform,first_seen,last_seen,source
+          from pwa_installs
+          order by last_seen desc nulls last, first_seen desc
+          limit 2000
+        `);
+        return json(res,200,{installs:rows});
+      }
       if(url.pathname==='/api/admin/customers'&&req.method==='GET'){
         const search=safeString(new URL(req.url,'http://localhost').searchParams.get('q')||'',100);
         const {rows}=await pool.query(`
