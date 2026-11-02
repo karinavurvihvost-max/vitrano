@@ -1035,4 +1035,50 @@ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventD
  fetch(api,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({visitor_id:id,path:location.pathname}),keepalive:true}).catch(()=>{});
 }catch(e){}})();
 </script>
+
+<style>
+#vitrano-warehouse-guide{position:fixed;inset:0;z-index:10050;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(8,25,53,.58);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#vitrano-warehouse-guide.show{display:flex}
+.vwg-card{width:min(100%,510px);max-height:min(88vh,760px);overflow:auto;border:1px solid #ffffffd9;border-radius:28px;padding:24px;background:linear-gradient(155deg,#fff 0%,#f1f7ff 100%);box-shadow:0 28px 90px #001b493d;color:#142746}
+.vwg-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.vwg-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,#2e8aff,#075ce4);color:#fff;font-size:25px;box-shadow:0 8px 20px #0869ed30}
+.vwg-card h2{font-size:23px;line-height:1.15;margin:0;letter-spacing:-.5px}
+.vwg-card p{font-size:14px;line-height:1.55;color:#5d718d;margin:10px 0}
+.vwg-steps{display:grid;gap:10px;margin:18px 0}
+.vwg-step{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid #e0ebf8;border-radius:16px;background:#ffffffc9}
+.vwg-num{flex:0 0 28px;height:28px;border-radius:9px;display:grid;place-items:center;background:#e4f0ff;color:#0869ed;font-weight:900}
+.vwg-step b{display:block;font-size:14px;margin:1px 0 3px}
+.vwg-step span{display:block;font-size:12px;line-height:1.45;color:#647892}
+.vwg-note{padding:12px 14px;border-radius:14px;background:#fff3dc;color:#805719;font-size:12px;line-height:1.5}
+.vwg-actions{display:flex;gap:10px;margin-top:18px}
+.vwg-actions button{flex:1;min-height:46px;border-radius:14px;font-weight:800}
+#vwg-close{border:1px solid #dce8f6;background:#fff;color:#526987}
+#vwg-start{border:0;background:linear-gradient(120deg,#2e8aff,#075ce4);color:white;box-shadow:0 8px 18px #0869ed2a}
+@media(max-width:420px){.vwg-card{padding:19px;border-radius:23px}.vwg-card h2{font-size:21px}.vwg-actions{flex-direction:column}}
+</style>
+<div id="vitrano-warehouse-guide" role="dialog" aria-modal="true" aria-labelledby="vwg-title">
+ <div class="vwg-card">
+  <div class="vwg-top"><div class="vwg-icon" aria-hidden="true">▤</div><div><div style="font-size:10px;font-weight:900;letter-spacing:1.6px;color:#2479e9;margin-bottom:4px">ВІТАЄМО У VITRANO</div><h2 id="vwg-title">Як працюють склади?</h2></div></div>
+  <p>У магазині є кілька складів. У кожного — свій асортимент, ціни та наявність товарів.</p>
+  <div class="vwg-steps">
+   <div class="vwg-step"><div class="vwg-num">1</div><div><b>Оберіть склад</b><span>Перед покупками натисніть потрібний склад у блоці «Склади».</span></div></div>
+   <div class="vwg-step"><div class="vwg-num">2</div><div><b>Перевірте ціну й наявність</b><span>Відкрийте товар — його ціна та доступність показуються окремо для кожного складу.</span></div></div>
+   <div class="vwg-step"><div class="vwg-num">3</div><div><b>Оформлюйте замовлення з одного складу</b><span>Товари з різних складів оформлюються окремими замовленнями. Мінімальна кількість товарів, якщо вона встановлена, відображається для вибраного складу.</span></div></div>
+  </div>
+  <div class="vwg-note">💡 Змінюєте склад? Спершу перевірте кошик: після зміни складу товари з попереднього складу не залишаються в ньому.</div>
+  <div class="vwg-actions"><button id="vwg-close" type="button">Пізніше</button><button id="vwg-start" type="button">Зрозуміло, до покупок</button></div>
+ </div>
+</div>
+<script>
+(()=>{const key='vitrano_warehouse_guide_seen_v1',wrap=document.getElementById('vitrano-warehouse-guide');if(!wrap)return;
+const close=()=>{wrap.classList.remove('show');try{localStorage.setItem(key,'1')}catch{}};
+document.getElementById('vwg-close').addEventListener('click',close);
+document.getElementById('vwg-start').addEventListener('click',()=>{close();document.getElementById('warehouses')?.scrollIntoView({behavior:'smooth',block:'center'})});
+wrap.addEventListener('click',e=>{if(e.target===wrap)close()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&wrap.classList.contains('show'))close()});
+let seen=false;try{seen=localStorage.getItem(key)==='1'}catch{}
+if(!seen){const show=()=>wrap.classList.add('show');if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',show,{once:true});else setTimeout(show,450)}
+})();
+</script>
+
 </body></html>
