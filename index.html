@@ -1145,4 +1145,44 @@ if(!seen){const show=()=>wrap.classList.add('show');if(document.readyState==='lo
 #warehouses .warehouse-cards > button#warehousecard3 .warehouse-arrow{color:#f15b43!important}
 </style>
 
+
+<style id="vitrano-bottomnav-reference-match">
+@media(max-width:760px){
+ body{padding-bottom:calc(92px + env(safe-area-inset-bottom,0px))!important}
+ .bottomnav{
+  display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center;gap:4px;
+  position:fixed!important;left:12px!important;right:12px!important;bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;
+  z-index:1000!important;padding:9px!important;border-radius:30px!important;
+  background:linear-gradient(115deg,rgba(255,255,255,.94),rgba(250,244,255,.94),rgba(239,247,255,.95))!important;
+  border:1px solid rgba(255,255,255,.95)!important;
+  box-shadow:0 12px 38px rgba(63,88,190,.18),0 0 22px rgba(238,82,218,.15),inset 0 1px 0 #fff!important;
+  backdrop-filter:blur(22px) saturate(1.5)!important;-webkit-backdrop-filter:blur(22px) saturate(1.5)!important;
+ }
+ .bottomnav .navitem{
+  min-width:0!important;min-height:76px!important;display:flex!important;flex-direction:column!important;
+  justify-content:center!important;align-items:center!important;gap:5px!important;
+  padding:7px 2px 8px!important;border:1px solid transparent!important;border-radius:22px!important;
+  background:transparent!important;color:#273c91!important;font-size:clamp(10px,2.8vw,13px)!important;
+  font-weight:750!important;line-height:1.1!important;white-space:nowrap!important;
+  box-shadow:none!important;transition:transform .18s,background .18s,box-shadow .18s!important;
+ }
+ .bottomnav .navitem span{
+  display:grid!important;place-items:center!important;width:36px!important;height:34px!important;
+  font-size:28px!important;line-height:1!important;font-weight:500!important;
+  color:#1767e8!important;text-shadow:0 2px 8px rgba(50,130,255,.16)!important;
+ }
+ .bottomnav .navitem[data-go="cart"] span{font-size:25px!important}
+ .bottomnav .navitem[data-go="favorites"] span{color:#f02c83!important}
+ .bottomnav .navitem.active{
+  color:#fff!important;background:linear-gradient(135deg,#ff4ba6 0%,#c82cff 52%,#7b3dff 100%)!important;
+  border:1px solid rgba(255,255,255,.95)!important;
+  box-shadow:0 5px 18px rgba(205,42,255,.28),0 0 0 3px rgba(255,104,221,.13),inset 0 1px 0 rgba(255,255,255,.65)!important;
+  transform:translateY(-1px)!important;position:relative!important;
+ }
+ .bottomnav .navitem.active span{color:#fff!important;text-shadow:0 1px 7px #ffffff70!important}
+ .bottomnav .navitem.active:after{content:"";position:absolute;bottom:5px;left:27%;width:46%;height:3px;border-radius:99px;background:#fff;box-shadow:0 0 8px #fff}
+ .bottomnav .navitem:active{transform:scale(.96)!important}
+}
+</style>
+
 </body></html>
