@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://vitrano-storefront.onrender.com/sitemap.xml
