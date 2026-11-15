@@ -13,6 +13,8 @@ log = logging.getLogger("vitrano-bot")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_ID = os.getenv("ADMIN_ID", "").strip()
 CHANNEL_ID = os.getenv("CHANNEL_ID", "").strip()
+MARKETMIX_CHANNEL_ID = os.getenv("MARKETMIX_CHANNEL_ID", "").strip()
+MARKETMIX_STORE_URL = "https://t.me/marketmixua_bot"
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "https://vitrano-telegram-bot.onrender.com").strip().rstrip("/")
 WEBHOOK_PATH = "/telegram/webhook"
 WEBHOOK_SECRET = hashlib.sha256((BOT_TOKEN + ":vitrano-webhook").encode()).hexdigest()[:40] if BOT_TOKEN else ""
@@ -111,12 +113,19 @@ def handle_message(message):
         sessions.pop(str(user_id), None)
         send(chat_id, "Створення публікації скасовано.")
         return
-    if text.startswith("/post"):
+    if text.startswith("/post_marketmix"):
+        if not MARKETMIX_CHANNEL_ID:
+            send(chat_id, "Канал Market Mix ще не налаштований у Render.")
+            return
+        sessions[str(user_id)] = {"stage": "photo", "channel_id": MARKETMIX_CHANNEL_ID, "channel_name": "Market Mix", "marketmix": True}
+        send(chat_id, "MARKET MIX: надішліть фото товару з підписом українською — назва, короткий опис, ціна та наявність.")
+        return
+    if text == "/post" or text.startswith("/post_vitrano"):
         if not CHANNEL_ID:
             send(chat_id, "Бот ще не налаштований: власник має додати CHANNEL_ID у змінні середовища Render.")
             return
-        sessions[str(user_id)] = {"stage": "photo"}
-        send(chat_id, "Надішліть фото товару з підписом українською: назва, короткий опис, ціна та наявність. Не вказуйте ціну, якщо її не перевірили на сайті.")
+        sessions[str(user_id)] = {"stage": "photo", "channel_id": CHANNEL_ID, "channel_name": "VITRANO", "marketmix": False}
+        send(chat_id, "VITRANO: надішліть фото товару з підписом українською: назва, короткий опис, ціна та наявність. Не вказуйте ціну, якщо її не перевірили на сайті.")
         return
 
     session = sessions.get(str(user_id))
@@ -160,12 +169,16 @@ def handle_message(message):
                 return
         try:
             markup = {"inline_keyboard": rows} if rows else None
-            payload = {"chat_id": CHANNEL_ID, "photo": session["photo"], "caption": session["caption"]}
+            if session.get("marketmix"):
+                rows.append([{"text": "🛒 Перейти в магазин", "url": MARKETMIX_STORE_URL}])
+                markup = {"inline_keyboard": rows}
+            payload = {"chat_id": session["channel_id"], "photo": session["photo"], "caption": session["caption"]}
             if markup:
                 payload["reply_markup"] = markup
             api("sendPhoto", payload)
+            channel_name = session.get("channel_name", "VITRANO")
             sessions.pop(str(user_id), None)
-            send(chat_id, "Готово: публікацію надіслано до каналу VITRANO. Перевірте, чи фото, текст, кнопки та посилання відображаються правильно.")
+            send(chat_id, f"Готово: публікацію надіслано до каналу {channel_name}. Перевірте фото, текст, кнопки та посилання.")
         except Exception as exc:
             log.error("Failed to publish (%s)", type(exc).__name__)
             send(chat_id, "Не вдалося опублікувати. Перевірте токен, CHANNEL_ID, права бота та посилання. Деталі помилки приховано з міркувань безпеки.")
