@@ -170,7 +170,7 @@ def handle_message(message):
         try:
             markup = {"inline_keyboard": rows} if rows else None
             if session.get("marketmix"):
-                rows.append([{"text": "🛒 Перейти в магазин", "url": MARKETMIX_STORE_URL}])
+                rows.append([{"text": "🛒 Перейти в магазин", "url": MARKETMIX_STORE_URL, "style": "primary"}])
                 markup = {"inline_keyboard": rows}
             payload = {"chat_id": session["channel_id"], "photo": session["photo"], "caption": session["caption"]}
             if markup:
