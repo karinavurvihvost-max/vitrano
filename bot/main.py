@@ -178,6 +178,14 @@ def telegram_webhook():
         return jsonify({"ok": False}), 403
 
     update = request.get_json(silent=True) or {}
+    channel_post = update.get("channel_post")
+    if channel_post and ADMIN_ID:
+        try:
+            channel = channel_post.get("chat", {})
+            if channel.get("type") == "channel":
+                send(ADMIN_ID, f"Канал: {channel.get('title', 'без названия')}\\nЧисловой ID: {channel.get('id')}")
+        except Exception as exc:
+            log.error("Channel ID notification failed (%s)", type(exc).__name__)
     message = update.get("message")
     if message:
         try:
@@ -199,7 +207,7 @@ def configure_webhook():
         result = api("setWebhook", {
             "url": RENDER_URL + WEBHOOK_PATH,
             "secret_token": WEBHOOK_SECRET,
-            "allowed_updates": ["message"],
+            "allowed_updates": ["message", "channel_post"],
             "drop_pending_updates": False
         })
         log.info("Telegram webhook configured: %s", bool(result))
