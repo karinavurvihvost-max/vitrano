@@ -86,6 +86,16 @@ def handle_message(message):
     user_id = user.get("id")
     text = (message.get("text") or "").strip()
 
+    # Reveal the numeric ID of a channel post forwarded by the owner.
+    if is_admin(user_id):
+        origin = message.get("forward_origin") or {}
+        forwarded_chat = origin.get("chat") if origin.get("type") == "channel" else message.get("forward_from_chat")
+        if forwarded_chat and forwarded_chat.get("type") == "channel":
+            channel_id = forwarded_chat.get("id")
+            title = forwarded_chat.get("title", "канал")
+            send(chat_id, f"Канал: {title}\\nЧисловой ID: {channel_id}\\nПередайте это значение для подключения канала.")
+            return
+
     if text == "/id":
         send(chat_id, f"Ваш Telegram ID: {user_id}\\nПередайте це число власнику бота для налаштування ADMIN_ID.")
         return
