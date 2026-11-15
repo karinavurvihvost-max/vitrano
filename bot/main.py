@@ -85,6 +85,22 @@ def handle_callback(callback):
         api("answerCallbackQuery", {"callback_query_id": callback_id, "text": "Немає доступу."})
         return
 
+    if data.startswith("color:"):
+        style = data.split(":", 1)[1]
+        if style not in {"primary", "success", "danger"}:
+            api("answerCallbackQuery", {"callback_query_id": callback_id, "text": "Невідомий колір."})
+            return
+        session = sessions.get(str(user_id))
+        if not session or session.get("stage") != "color":
+            api("answerCallbackQuery", {"callback_query_id": callback_id, "text": "Почніть із /post."})
+            return
+        session["button_style"] = style
+        session["stage"] = "photo"
+        api("answerCallbackQuery", {"callback_query_id": callback_id, "text": "Колір обрано."})
+        names = {"primary": "синій", "success": "зелений", "danger": "червоний"}
+        send(chat_id, f"Обрано {names[style]} колір. Тепер надішліть фото товару з готовим підписом українською.")
+        return
+
     channels = {
         "publish:vitrano": {
             "channel_id": CHANNEL_ID,
@@ -108,14 +124,18 @@ def handle_callback(callback):
         return
 
     sessions[str(user_id)] = {
-        "stage": "photo",
+        "stage": "color",
         "channel_id": selected["channel_id"],
         "channel_name": selected["channel_name"],
         "store_url": selected["store_url"],
         "button": selected["button"]
     }
     api("answerCallbackQuery", {"callback_query_id": callback_id, "text": selected["channel_name"]})
-    send(chat_id, f"Обрано {selected['channel_name']}.\nТепер надішліть одне фото товару з готовим підписом українською: назва, короткий опис, ціна та наявність.")
+    send(chat_id, "Оберіть колір кнопки магазину:", {"inline_keyboard": [
+        [{"text": "🔵 Синій", "callback_data": "color:primary"}],
+        [{"text": "🟢 Зелений", "callback_data": "color:success"}],
+        [{"text": "🔴 Червоний", "callback_data": "color:danger"}]
+    ]})
 
 
 def handle_message(message):
@@ -212,7 +232,7 @@ def handle_message(message):
                     "inline_keyboard": [[{
                         "text": session["button"],
                         "url": session["store_url"],
-                        "style": "primary"
+                        "style": session.get("button_style", "primary")
                     }]]
                 }
             }
